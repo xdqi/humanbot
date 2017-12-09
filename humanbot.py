@@ -5,6 +5,7 @@ from datetime import datetime
 from ftplib import FTP, Error as FTPError
 from io import BytesIO
 from requests import get
+import re
 
 from expiringdict import ExpiringDict
 
@@ -16,10 +17,90 @@ from telethon.tl.types import \
     MessageActionChatEditTitle, \
     PeerUser, InputUser, User, PeerChat, Chat, ChatFull, PeerChannel, Channel, ChannelFull, \
     Photo, PhotoSize, FileLocation
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.utils import get_input_user, get_peer_id, get_input_peer, resolve_id
 
 import models
 import config
+
+PUBLIC_REGEX = re.compile(r't(?:elegram)?\.me/([a-zA-Z0-9_]{5,32})')
+INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_]{22})')
+
+
+def find_link_to_join(msg: str):
+    public_links = PUBLIC_REGEX.findall(msg)
+
+    for link in public_links:
+        group = client.get_entity(link)
+        if isinstance(group, Channel):  # supergroup
+            if not group.broadcast:  # not a channel
+                session = models.Session()
+
+                gid = peer_to_internal_id(group.id)
+                group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+                if not group_exist:
+                    new_group = models.Group(gid=gid, name=group.title, link=group.username)
+                    session.add(new_group)
+                    client.invoke(JoinChannelRequest(group))
+                    group_last_changed[gid] = True
+                session.commit()
+                session.close()
+                models.Session.remove()
+
+        elif isinstance(group, Chat):  # group
+            session = models.Session()
+
+            gid = peer_to_internal_id(group.id)
+            group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+            if not group_exist:
+                new_group = models.Group(gid=gid, name=group.title, link=None)
+                session.add(new_group)
+                client.invoke(JoinChannelRequest(group))
+                group_last_changed[gid] = True
+            session.commit()
+            session.close()
+            models.Session.remove()
+
+    private_links = INVITE_REGEX.findall(msg)
+    for link in private_links:
+        group = client.get_entity(link)
+        if isinstance(group, Channel):  # supergroup
+            if not group.broadcast:  # not a channel
+                session = models.Session()
+
+                gid = peer_to_internal_id(group.id)
+                group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+                if not group_exist:
+                    for admin in config.ADMIN_UIDS:
+                        client.send_message(entity=client.get_entity(admin),
+                                            message='invitation from {}: {}, {} members, date {}'.format(
+                                                link,
+                                                group.title,
+                                                group.participants_count,
+                                                group.date
+                                            )
+                                            )
+                session.close()
+                models.Session.remove()
+
+        elif isinstance(group, Chat):  # group
+            session = models.Session()
+
+            gid = peer_to_internal_id(group.id)
+            group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+            if not group_exist:
+                for admin in config.ADMIN_UIDS:
+                    client.send_message(entity=client.get_entity(admin),
+                                        message='invitation from {}: {}, {} members, date {}'.format(
+                                            link,
+                                            group.title,
+                                            group.participants_count,
+                                            group.date
+                                        )
+                                        )
+            session.close()
+            models.Session.remove()
 
 
 def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
@@ -260,14 +341,22 @@ def update_message_from_user(update: UpdateShortMessage):
     if update.user_id in config.ADMIN_UIDS:
         output = ''
         if update.message.startswith('/exec'):
-            command = update.message[5:]
+            command = update.message[5:].strip()
             print('executing command', command)
             with popen(command, 'r') as f:
                 output = f.read()
         elif update.message.startswith('/py'):
-            script = update.message[3:]
+            script = update.message[3:].strip()
             print('evaluating script', script)
-            output = repr(eval(update.message[3:]))
+            output = repr(eval(script))
+        elif update.message.startswith('/joinpub'):
+            link = update.message[8:]
+            print('joining public group', link.strip())
+            output = client.invoke(JoinChannelRequest(client.get_entity(link)))
+        elif update.message.startswith('/joinprv'):
+            link = update.message[8:]
+            print('joining private group', link.strip())
+            output = client.invoke(ImportChatInviteRequest(link))
         if output:
             output = '```{}```'.format(output)
             print('sending message', output)
