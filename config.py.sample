@@ -1,0 +1,17 @@
+TG_API_ID = 0
+TG_API_HASH = 'xxxxxxxxxxxxxxxxxxxxxxx'
+
+SESSION_NAME = 'bot'
+PHONE_NUMBER = '+1xxxxxxxxx'
+MY_UID = 4444444444
+
+
+FTP_SERVER = dict(host='ftp-server', port=21)
+FTP_CREDENTIAL = dict(user='user', passwd='pass')
+FTP_NAME = 'example-xxx'
+OCR_URL = 'http://typ-style-ocr-server-url/http/picture-server-http-url'
+
+DB_CONFIG = {
+    'sqlalchemy.url': 'sqlite:///output.db'
+    # 'sqlalchemy.url': 'mysql://user:pass@db.example.com/db' # if you prefer MySQL
+}
