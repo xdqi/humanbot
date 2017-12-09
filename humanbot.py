@@ -142,7 +142,6 @@ def update_group(chat_id: int, title: str=None):
     """
     if chat_id in group_last_changed:  # user should be updated at a minute basis
         return
-    del group_last_changed[chat_id]
     group_last_changed[chat_id] = True
     group = client.get_entity(chat_id, force_fetch=True)
     if isinstance(group, (Chat, ChatFull)):
@@ -161,7 +160,8 @@ def update_chat_generic(chat_id: int):
 
 def update_group_title(chat_id, update: MessageActionChatEditTitle):
     name = update.title
-    del group_last_changed[chat_id]
+    if chat_id in group_last_changed:
+        del group_last_changed[chat_id]
     update_group(chat_id, name)
 
 
