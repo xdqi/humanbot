@@ -1,0 +1,8 @@
+telethon
+
+requests
+
+sqlalchemy
+mysql-connector-python
+
+expiringdict

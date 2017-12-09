@@ -1,0 +1,9 @@
+.DS_Store
+config.py
+__pycache__/
+*.pyc
+*.db
+*.session
+*.pem
+.idea/
+venv/
