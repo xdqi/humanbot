@@ -1,5 +1,6 @@
 import traceback
-from os import system, popen, getpid
+from os import popen, getpid
+from threading import current_thread
 from datetime import datetime
 from ftplib import FTP, Error as FTPError
 from io import BytesIO
@@ -13,9 +14,9 @@ from telethon.tl.types import \
     UpdateNewChannelMessage, UpdateShortMessage, UpdateShortChatMessage, UpdateNewMessage, \
     UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
     MessageActionChatEditTitle, \
-    PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
+    PeerUser, InputUser, User, PeerChat, Chat, ChatFull, PeerChannel, Channel, ChannelFull, \
     Photo, PhotoSize, FileLocation
-from telethon.utils import get_input_user, get_peer_id
+from telethon.utils import get_input_user, get_peer_id, get_input_peer, resolve_id
 
 import models
 import config
@@ -58,8 +59,8 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     print(user_id, first_name, last_name, username, lang_code)
 
     session = models.Session()
-    users = session.query(models.User).filter(models.User.uid == user_id)
-    if not users:  # new user
+    user = session.query(models.User).filter(models.User.uid == user_id).one_or_none()
+    if not user:  # new user
         user = models.User(uid=user_id,
                            first_name=first_name,
                            last_name=last_name,
@@ -68,7 +69,6 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
 
         session.add(user)
     else:  # existing user
-        user = users[0]
         same = user.first_name == first_name and user.last_name == last_name and user.username == username
         if not same:  # information changed
             user.first_name = first_name
@@ -100,21 +100,20 @@ def update_group_real(chat_id, name, link):
     print(chat_id, name, link)
 
     session = models.Session()
-    groups = session.query(models.Group).filter(models.Group.gid == chat_id)
-    if not groups:  # new group
+    group = session.query(models.Group).filter(models.Group.gid == chat_id).one_or_none()
+    if not group:  # new group
         group = models.Group(gid=chat_id, name=name, link=link)
         session.add(group)
     else:  # existing group
-        group = groups[0]
         same = group.name == name and group.link == link
         if not same:  # information changed
             group.name = name
             group.link = link
-            change = models.UsernameHistory(gid=chat_id,
-                                            name=name,
-                                            link=link,
-                                            date=datetime.now().timestamp()
-                                            )
+            change = models.GroupHistory(gid=chat_id,
+                                         name=name,
+                                         link=link,
+                                         date=datetime.now().timestamp()
+                                         )
             session.add(change)
     session.commit()
     session.close()
@@ -125,9 +124,8 @@ user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def update_user(user_id):
     if user_id in user_last_changed:  # user should be updated at a minute basis
         return
+    user = client.get_entity(user_id, force_fetch=True)  # type: User
     user_last_changed[user_id] = True
-    input_user = get_input_user(PeerUser(user_id))  # type: InputUser
-    user = client.get_entity(input_user, force_fetch=True)  # type: User
     update_user_real(user_id, user.first_name, user.last_name, user.username, user.lang_code)
 
 
@@ -136,14 +134,16 @@ def update_group(chat_id: int, title: str=None):
     """
     Try to update group information
 
-    :param chat_id: Chat ID (DO NOT PASS BOT MARKED FORMAT)
+    :param chat_id: Chat ID (bot marked format)
     :param title: New group title (optional)
     :return: None
     """
     if chat_id in group_last_changed:  # user should be updated at a minute basis
         return
+    id, type = resolve_id(chat_id)
+    peer = type(id)
+    group = client.get_entity(peer, force_fetch=True)
     group_last_changed[chat_id] = True
-    group = client.get_entity(chat_id, force_fetch=True)
     if isinstance(group, (Chat, ChatFull)):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, None)
     elif isinstance(group, (Channel, ChannelFull)):
@@ -151,6 +151,12 @@ def update_group(chat_id: int, title: str=None):
 
 
 def update_chat_generic(chat_id: int):
+    """
+    Received message
+
+    :param chat_id: bot marked format chat id
+    :return:
+    """
     input_entity = client.get_input_entity(chat_id)
     if isinstance(input_entity, InputUser):
         update_user(chat_id)
@@ -158,7 +164,14 @@ def update_chat_generic(chat_id: int):
         update_group(chat_id)
 
 
-def update_group_title(chat_id, update: MessageActionChatEditTitle):
+def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
+    """
+    Update group title event handler
+
+    :param chat_id: Bot marked chat id
+    :param update:
+    :return:
+    """
     name = update.title
     if chat_id in group_last_changed:
         del group_last_changed[chat_id]
@@ -232,11 +245,13 @@ def update_message(update: Message):
         insert_message(chat, update.from_id, text, update.date)
 
     update_chat_generic(chat)
+    update_user(update.from_id)
 
 
 def update_message_from_chat(update: UpdateShortChatMessage):
     insert_message(-update.chat_id, update.from_id, update.message, update.date)
-    update_group(update.chat_id)
+    update_group(-update.chat_id)
+    update_user(update.from_id)
 
 
 def update_message_from_user(update: UpdateShortMessage):
@@ -271,7 +286,7 @@ def update_handler(update):
             update_message(update.message)
         elif isinstance(update.message, MessageService):  # action
             if isinstance(update.message.action, MessageActionChatEditTitle):
-                update_group_title(update.message.to_id, update.message.action)
+                update_group_title(peer_to_internal_id(update.message.to_id), update.message.action)
 
     elif isinstance(update, UpdateShortMessage):  # private message
         update_message_from_user(update)
@@ -293,6 +308,7 @@ def update_handler_wrapper(update):
     try:
         update_handler(update)
     except Exception:
+        print('Exception raised on PID', getpid(), current_thread())
         traceback.print_exc()
 
 
