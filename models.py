@@ -20,18 +20,20 @@ class Chat(Base):
 class User(Base):
     __tablename__ = 'users'
     uid = Column('uid', Integer(), primary_key=True, nullable=False)
-    name = Column('name', String(60))
-    firstname = Column('firstname', String(16))
-    lastname = Column('lastname', String(16))
+    username = Column('name', String(60))
+    first_name = Column('firstname', String(50))
+    last_name = Column('lastname', String(50))
+    lang_code = Column('lang', String(10))
 
 
 class UsernameHistory(Base):
     __tablename__ = 'user_history'
     id = Column('id', Integer(), primary_key=True, autoincrement=True)
     uid = Column('uid', Integer(), index=True, nullable=False)
-    name = Column('name', String(60))
-    firstname = Column('firstname', String(16))
-    lastname = Column('lastname', String(16))
+    username = Column('name', String(60))
+    first_name = Column('firstname', String(50))
+    last_name = Column('lastname', String(50))
+    lang_code = Column('lang', String(10))
     date = Column('date', Integer(), index=True)
 
 

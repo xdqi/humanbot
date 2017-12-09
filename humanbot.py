@@ -1,4 +1,4 @@
-import os
+from os import system, popen, getpid
 from datetime import datetime
 from ftplib import FTP, Error as FTPError
 from io import BytesIO
@@ -56,6 +56,36 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     """
     print(user_id, first_name, last_name, username, lang_code)
 
+    session = models.Session()
+    users = session.query(models.User).filter(models.User.uid == user_id)
+    if not users:  # new user
+        user = models.User(uid=user_id,
+                           first_name=first_name,
+                           last_name=last_name,
+                           username=username,
+                           lang_code=lang_code)
+
+        session.add(user)
+    else:  # existing user
+        user = users[0]
+        same = user.first_name == first_name and user.last_name == last_name and user.username == username
+        if not same:  # information changed
+            user.first_name = first_name
+            user.last_name = last_name
+            user.username = username
+            user.lang_code = lang_code
+            change = models.UsernameHistory(uid=user_id,
+                                            username=username,
+                                            first_name=first_name,
+                                            last_name=last_name,
+                                            lang_code=lang_code,
+                                            date=datetime.now().timestamp()
+                                            )
+            session.add(change)
+    session.commit()
+    session.close()
+    models.Session.remove()
+
 
 def update_group_real(chat_id, name, link):
     """
@@ -67,6 +97,27 @@ def update_group_real(chat_id, name, link):
     :return:
     """
     print(chat_id, name, link)
+
+    session = models.Session()
+    groups = session.query(models.Group).filter(models.Group.gid == chat_id)
+    if not groups:  # new group
+        group = models.Group(gid=chat_id, name=name, link=link)
+        session.add(group)
+    else:  # existing group
+        group = groups[0]
+        same = group.name == name and group.link == link
+        if not same:  # information changed
+            group.name = name
+            group.link = link
+            change = models.UsernameHistory(gid=chat_id,
+                                            name=name,
+                                            link=link,
+                                            date=datetime.now().timestamp()
+                                            )
+            session.add(change)
+    session.commit()
+    session.close()
+    models.Session.remove()
 
 
 user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
@@ -190,10 +241,30 @@ def update_message_from_chat(update: UpdateShortChatMessage):
 def update_message_from_user(update: UpdateShortMessage):
     insert_message(update.user_id, update.user_id, update.message, update.date)
     update_user(update.user_id)
+    if update.user_id in config.ADMIN_UIDS:
+        output = ''
+        if update.message.startswith('/exec'):
+            command = update.message[5:]
+            print('executing command', command)
+            with popen(command, 'r') as f:
+                output = f.read()
+        elif update.message.startswith('/py'):
+            script = update.message[3:]
+            print('evaluating script', script)
+            output = repr(eval(update.message[3:]))
+        if output:
+            output = '```{}```'.format(output)
+            print('sending message', output)
+            client.send_message(entity=update.user_id,
+                                message=output,
+                                reply_to=update.id,
+                                parse_mode='markdown',
+                                link_preview=False
+                                )
 
 
 def update_handler(update):
-    print('pid', os.getpid(), update)
+    print('pid', getpid(), update)
     if isinstance(update, (UpdateNewChannelMessage, UpdateNewMessage)):  # message from group/user
         if isinstance(update.message, Message):  # message
             update_message(update.message)
