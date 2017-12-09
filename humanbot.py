@@ -1,3 +1,4 @@
+import traceback
 from os import system, popen, getpid
 from datetime import datetime
 from ftplib import FTP, Error as FTPError
@@ -288,6 +289,13 @@ def update_handler(update):
         pass
 
 
+def update_handler_wrapper(update):
+    try:
+        update_handler(update)
+    except Exception:
+        traceback.print_exc()
+
+
 def main():
     global client
     client = TelegramClient(session=config.SESSION_NAME,
@@ -313,7 +321,7 @@ def main():
 
     print('INFO: Client initialized succesfully!')
 
-    client.add_update_handler(update_handler)
+    client.add_update_handler(update_handler_wrapper)
     client.idle()
     client.disconnect()
 
