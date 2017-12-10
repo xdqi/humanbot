@@ -261,7 +261,7 @@ def download_file(media: MessageMediaPhoto):
     # calculate path
     original = media.photo.sizes[-1]  # type: PhotoSize
     location = original.location  # type: FileLocation
-    path = '{}/{}'.format(location.dc_id, location.volume_id)
+    path = '/{}/{}'.format(location.dc_id, location.volume_id)
     filename = '{}.jpg'.format(location.local_id)
 
     return buffer, path, filename
@@ -280,7 +280,7 @@ def upload_ocr(buffer, path, filename) -> str:
     print('pic uploaded')
 
     # do the ocr on server
-    result = 'tgpic://kosaka/{}/{}'.format(config.FTP_NAME, fullpath)
+    result = 'tgpic://kosaka/{}{}'.format(config.FTP_NAME, fullpath)
     req = get(config.OCR_URL + fullpath)
     ocr_result = req.json()  # type: dict
     if 'body' in ocr_result.keys():
@@ -304,7 +304,7 @@ def update_message(update: Message):
     if update.message:
         insert_message(chat, update.from_id, update.message, update.date)
     elif isinstance(update.media, (MessageMediaDocument, MessageMediaPhoto)):
-        text = update.media.caption
+        text = update.media.caption or ''  # in case it is `None`
         if isinstance(update.media, MessageMediaPhoto):
             result = download_upload_ocr(update.media)
             text = result + '\n' + text
@@ -358,7 +358,7 @@ def update_message_from_user(update: UpdateShortMessage):
 
 
 def update_handler(update):
-    print('pid', getpid(), update)
+    print('humanbot', update)
     if isinstance(update, (UpdateNewChannelMessage, UpdateNewMessage)):  # message from group/user
         if isinstance(update.message, Message):  # message
             update_message(update.message)

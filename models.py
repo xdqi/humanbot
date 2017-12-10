@@ -53,7 +53,7 @@ class GroupHistory(Base):
     date = Column('date', Integer, index=True)
 
 
-engine = engine_from_config(config.DB_CONFIG, echo=True)
+engine = engine_from_config(config.DB_CONFIG, echo=not config.PRODUCTION)
 
 session_factory = sessionmaker(bind=engine)
 
