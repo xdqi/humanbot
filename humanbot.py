@@ -349,8 +349,8 @@ def update_message_from_user(update: UpdateShortMessage):
             print('leaving public group', link)
             output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
         elif update.message.startswith('/joinprv'):
-            link = update.message[8:]
-            print('joining private group', link.strip())
+            link = update.message[8:].strip()
+            print('joining private group', link)
             output = client.invoke(ImportChatInviteRequest(link))
         if output:
             output = '```{}```'.format(output)
