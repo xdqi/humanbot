@@ -37,7 +37,7 @@ def find_link_to_join(session, msg: str):
         print('found links', 'public:', public_links, 'private:', private_links)
 
     for link in public_links:
-        if link == 'joinchat':  # false detection of private link
+        if link in config.GROUP_BLACKLIST:  # false detection of private link
             continue
         group = client.get_entity(link)
         if isinstance(group, Chat) or (isinstance(group, Channel) and not group.broadcast):

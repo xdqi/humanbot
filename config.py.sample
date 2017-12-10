@@ -12,6 +12,8 @@ BOT_WEBHOOK_PORT = 8080
 BOT_WEBHOOK_PATH = 'tg-Webhook-xxxx'
 BOT_WEBHOOK_URL = 'https://webhook-url/' + BOT_WEBHOOK_PATH
 
+GROUP_BLACKLIST = ['joinchat', 'socks']
+
 FTP_SERVER = dict(host='ftp-server', port=21)
 FTP_CREDENTIAL = dict(user='user', passwd='pass')
 FTP_NAME = 'example-xxx'
