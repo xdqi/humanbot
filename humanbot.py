@@ -25,7 +25,7 @@ import models
 import config
 import realbot
 
-PUBLIC_REGEX = re.compile(r't(?:elegram)?\.me/([a-zA-Z0-9_]{5,32})')
+PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 
 
