@@ -23,6 +23,7 @@ from telethon.utils import get_input_user, get_peer_id, get_input_peer, resolve_
 
 import models
 import config
+import realbot
 
 PUBLIC_REGEX = re.compile(r't(?:elegram)?\.me/([a-zA-Z0-9_]{5,32})')
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
@@ -249,7 +250,7 @@ class KosakaFTP(FTP):
                 self.cwd(directory)
 
 
-def ocr(media: MessageMediaPhoto) -> str:
+def download_file(media: MessageMediaPhoto):
     print('pic to download')
     # download from telegram server
     buffer = BytesIO()
@@ -260,10 +261,14 @@ def ocr(media: MessageMediaPhoto) -> str:
     # calculate path
     original = media.photo.sizes[-1]  # type: PhotoSize
     location = original.location  # type: FileLocation
-    path = '/{}/{}'.format(location.dc_id, location.volume_id)
+    path = '{}/{}'.format(location.dc_id, location.volume_id)
     filename = '{}.jpg'.format(location.local_id)
-    fullpath = '{}/{}'.format(path, filename)
 
+    return buffer, path, filename
+
+
+def upload_ocr(buffer, path, filename) -> str:
+    fullpath = '{}/{}'.format(path, filename)
     # upload to ftp server
     ftp = KosakaFTP()
     ftp.connect(**config.FTP_SERVER)
@@ -286,6 +291,11 @@ def ocr(media: MessageMediaPhoto) -> str:
     return result
 
 
+def download_upload_ocr(media: MessageMediaPhoto):
+    buffer, path, filename = download_file(media)
+    return upload_ocr(buffer, path, filename)
+
+
 def update_message(update: Message):
     if isinstance(update.to_id, PeerUser) and update.to_id.user_id == config.MY_UID:  # private message
         chat = update.from_id
@@ -296,7 +306,7 @@ def update_message(update: Message):
     elif isinstance(update.media, (MessageMediaDocument, MessageMediaPhoto)):
         text = update.media.caption
         if isinstance(update.media, MessageMediaPhoto):
-            result = ocr(update.media)
+            result = download_upload_ocr(update.media)
             text = result + '\n' + text
         insert_message(chat, update.from_id, text, update.date)
 
@@ -406,6 +416,7 @@ def main():
     print('INFO: Client initialized succesfully!')
 
     client.add_update_handler(update_handler_wrapper)
+    realbot.main()
     client.idle()
     client.disconnect()
 
