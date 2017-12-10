@@ -1,7 +1,7 @@
 import traceback
 from os import popen, getpid
 from threading import current_thread
-from datetime import datetime
+from datetime import datetime, timezone
 from ftplib import FTP, Error as FTPError
 from io import BytesIO
 from requests import get
@@ -90,6 +90,11 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
     find_link_to_join(session, msg)
     session.close()
     models.Session.remove()
+
+
+def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
+    utc_date = date.replace(tzinfo=timezone.utc)
+    insert_message(chat_id, user_id, msg, utc_date)
 
 
 def peer_to_internal_id(peer):
@@ -308,26 +313,26 @@ def update_message(update: Message):
     else:
         chat = peer_to_internal_id(update.to_id)
     if update.message:
-        insert_message(chat, update.from_id, update.message, update.date)
+        insert_message_local_timezone(chat, update.from_id, update.message, update.date)
     elif isinstance(update.media, (MessageMediaDocument, MessageMediaPhoto)):
         text = update.media.caption or ''  # in case it is `None`
         if isinstance(update.media, MessageMediaPhoto):
             result = download_upload_ocr(update.media)
             text = result + '\n' + text
-        insert_message(chat, update.from_id, text, update.date)
+            insert_message_local_timezone(chat, update.from_id, text, update.date)
 
     update_chat_generic(chat)
     update_user(update.from_id)
 
 
 def update_message_from_chat(update: UpdateShortChatMessage):
-    insert_message(-update.chat_id, update.from_id, update.message, update.date)
+    insert_message_local_timezone(-update.chat_id, update.from_id, update.message, update.date)
     update_group(-update.chat_id)
     update_user(update.from_id)
 
 
 def update_message_from_user(update: UpdateShortMessage):
-    insert_message(update.user_id, update.user_id, update.message, update.date)
+    insert_message_local_timezone(update.user_id, update.user_id, update.message, update.date)
     update_user(update.user_id)
     if update.user_id in config.ADMIN_UIDS:
         output = ''
