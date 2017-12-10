@@ -140,7 +140,10 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
                                             date=datetime.now().timestamp()
                                             )
             session.add(change)
-    session.commit()
+    try:
+        session.commit()
+    except:  # PRIMARY KEY CONSTRAINT
+        session.rollback()
     session.close()
     models.Session.remove()
 
@@ -172,7 +175,10 @@ def update_group_real(chat_id, name, link):
                                          date=datetime.now().timestamp()
                                          )
             session.add(change)
-    session.commit()
+    try:
+        session.commit()
+    except:  # PRIMARY KEY CONSTRAINT
+        session.rollback()
     session.close()
     models.Session.remove()
 
