@@ -16,91 +16,64 @@ from telethon.tl.types import \
     UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
     MessageActionChatEditTitle, \
     PeerUser, InputUser, User, PeerChat, Chat, ChatFull, PeerChannel, Channel, ChannelFull, \
-    Photo, PhotoSize, FileLocation
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.functions.messages import ImportChatInviteRequest
+    Photo, PhotoSize, FileLocation, ChatInvite, ChatInviteAlready
+from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.utils import get_input_user, get_peer_id, get_input_peer, resolve_id
 
 import models
 import config
 
 PUBLIC_REGEX = re.compile(r't(?:elegram)?\.me/([a-zA-Z0-9_]{5,32})')
-INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_]{22})')
+INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 
 
-def find_link_to_join(msg: str):
+def find_link_to_join(session, msg: str):
     public_links = PUBLIC_REGEX.findall(msg)
+    private_links = INVITE_REGEX.findall(msg)
+
+    if public_links + private_links:
+        print('found links', 'public:', public_links, 'private:', private_links)
 
     for link in public_links:
+        if link == 'joinchat':  # false detection of private link
+            continue
         group = client.get_entity(link)
-        if isinstance(group, Channel):  # supergroup
-            if not group.broadcast:  # not a channel
-                session = models.Session()
-
-                gid = peer_to_internal_id(group.id)
-                group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
-                if not group_exist:
-                    new_group = models.Group(gid=gid, name=group.title, link=group.username)
-                    session.add(new_group)
-                    client.invoke(JoinChannelRequest(group))
-                    group_last_changed[gid] = True
-                session.commit()
-                session.close()
-                models.Session.remove()
-
-        elif isinstance(group, Chat):  # group
-            session = models.Session()
-
+        if isinstance(group, Chat) or (isinstance(group, Channel) and not group.broadcast):
             gid = peer_to_internal_id(group.id)
             group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
             if not group_exist:
-                new_group = models.Group(gid=gid, name=group.title, link=None)
+                link = group.username if hasattr(group, 'username') else None
+                new_group = models.Group(gid=gid, name=group.title, link=link)
                 session.add(new_group)
-                client.invoke(JoinChannelRequest(group))
-                group_last_changed[gid] = True
-            session.commit()
-            session.close()
-            models.Session.remove()
-
-    private_links = INVITE_REGEX.findall(msg)
-    for link in private_links:
-        group = client.get_entity(link)
-        if isinstance(group, Channel):  # supergroup
-            if not group.broadcast:  # not a channel
-                session = models.Session()
-
-                gid = peer_to_internal_id(group.id)
-                group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
-                if not group_exist:
-                    for admin in config.ADMIN_UIDS:
-                        client.send_message(entity=client.get_entity(admin),
-                                            message='invitation from {}: {}, {} members, date {}'.format(
-                                                link,
-                                                group.title,
-                                                group.participants_count,
-                                                group.date
-                                            )
-                                            )
-                session.close()
-                models.Session.remove()
-
-        elif isinstance(group, Chat):  # group
-            session = models.Session()
-
-            gid = peer_to_internal_id(group.id)
-            group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
-            if not group_exist:
+                result = client.invoke(JoinChannelRequest(group))
                 for admin in config.ADMIN_UIDS:
                     client.send_message(entity=client.get_entity(admin),
-                                        message='invitation from {}: {}, {} members, date {}'.format(
+                                        message='joined public group {}: {} having {} members,'
+                                                ' date {}.\nresult: {}'.format(
                                             link,
                                             group.title,
                                             group.participants_count,
-                                            group.date
+                                            group.date,
+                                            result
                                         )
                                         )
-            session.close()
-            models.Session.remove()
+                group_last_changed[gid] = True
+
+    for link in private_links:
+        invite_hash = link[-22:]
+        group = client.invoke(CheckChatInviteRequest(invite_hash))
+        if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
+            for admin in config.ADMIN_UIDS:
+                client.send_message(entity=client.get_entity(admin),
+                                    message='invitation from {}: {}, {} members\n'
+                                            'Join group with /joinprv {}'.format(
+                                        link,
+                                        group.title,
+                                        group.participants_count,
+                                        link[-22:]
+                                    )
+                                    )
 
 
 def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
@@ -112,6 +85,8 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
     chat = models.Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
     session.add(chat)
     session.commit()
+
+    find_link_to_join(session, msg)
     session.close()
     models.Session.remove()
 
@@ -350,9 +325,13 @@ def update_message_from_user(update: UpdateShortMessage):
             print('evaluating script', script)
             output = repr(eval(script))
         elif update.message.startswith('/joinpub'):
-            link = update.message[8:]
-            print('joining public group', link.strip())
+            link = update.message[8:].strip()
+            print('joining public group', link)
             output = client.invoke(JoinChannelRequest(client.get_entity(link)))
+        elif update.message.startswith('/leavepub'):
+            link = update.message[9:].strip()
+            print('leaving public group', link)
+            output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
         elif update.message.startswith('/joinprv'):
             link = update.message[8:]
             print('joining private group', link.strip())
