@@ -257,6 +257,9 @@ def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
 
 
 class KosakaFTP(FTP):
+    def __init__(self, *args, **kwargs):
+        super().__init__(timeout=5, *args, **kwargs)
+
     def cdp(self, directory):
         if directory != "":
             try:
@@ -302,7 +305,7 @@ def upload_ocr(buffer, path, filename) -> str:
 
     # do the ocr on server
     result = 'tgpic://kosaka/{}{}'.format(config.FTP_NAME, fullpath)
-    req = get(config.OCR_URL + fullpath)
+    req = get(config.OCR_URL + fullpath, timeout=10)
     ocr_result = req.json()  # type: dict
     if 'body' in ocr_result.keys():
         result += '\n'
