@@ -48,7 +48,7 @@ def find_link_to_join(session, msg: str):
             continue
         group = client.get_entity(link)
         if isinstance(group, Chat) or (isinstance(group, Channel) and not group.broadcast):
-            gid = peer_to_internal_id(group.id)
+            gid = peer_to_internal_id(group)
             group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
             if not group_exist:
                 link = group.username if hasattr(group, 'username') else None
