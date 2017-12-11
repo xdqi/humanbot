@@ -291,6 +291,21 @@ def download_file(media: MessageMediaPhoto):
     return buffer, path, filename
 
 
+def remove_ocr_spaces(msg: str):
+    parts = msg.split(' ')
+    result = ''
+    for i in range(len(parts) - 1):
+        result += parts[i]
+
+        prev = parts[i][-1]
+        after = parts[i + 1][0]
+        if ord(prev) < 1328 and ord(after) < 1328:  # detect latin/cyrillic character only
+            result += ' '
+
+    result += parts[-1]
+    return result
+
+
 def upload_ocr(buffer, path, filename) -> str:
     fullpath = '{}/{}'.format(path, filename)
     # upload to ftp server
@@ -309,8 +324,8 @@ def upload_ocr(buffer, path, filename) -> str:
     ocr_result = req.json()  # type: dict
     if 'body' in ocr_result.keys():
         result += '\n'
-        result += ocr_result['body']
-    print('pic ocred')
+        result += remove_ocr_spaces(ocr_result['body'])
+    print('pic ocred\n', result)
 
     return result
 
