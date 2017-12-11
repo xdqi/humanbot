@@ -37,6 +37,7 @@ def send_message_to_administrators(msg: str):
                             parse_mode='markdown',
                             link_preview=False)
 
+
 def find_link_to_join(session, msg: str):
     public_links = PUBLIC_REGEX.findall(msg)
     private_links = INVITE_REGEX.findall(msg)
@@ -58,13 +59,13 @@ def find_link_to_join(session, msg: str):
                 result = client.invoke(JoinChannelRequest(group))
                 send_message_to_administrators('joined public group {}: {} having {} members,'
                                                ' date {}.\nresult: {}'.format(
-                                               link,
-                                               group.title,
-                                               group.participants_count,
-                                               group.date,
-                                               result
-                                               )
-                                               )
+                    link,
+                    group.title,
+                    group.participants_count,
+                    group.date,
+                    result
+                )
+                )
                 group_last_changed[gid] = True
 
     for link in private_links:
@@ -73,11 +74,11 @@ def find_link_to_join(session, msg: str):
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join group with /joinprv {}'.format(
-                                           link,
-                                           group.title,
-                                           group.participants_count,
-                                           link[-22:]
-                                           )
+                link,
+                group.title,
+                group.participants_count,
+                link[-22:]
+            )
             )
 
 
@@ -95,7 +96,7 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
             break
         except:
             session.rollback()
-            send_message_to_administrators('DB write ' + i + ' failed:\n' + traceback.format_exc())
+            send_message_to_administrators('DB write {} failed:\n{}'.format(i, traceback.format_exc()))
     find_link_to_join(session, msg)
     session.close()
     models.Session.remove()
@@ -207,7 +208,7 @@ def update_user(user_id):
 
 
 group_last_changed = ExpiringDict(max_len=1000, max_age_seconds=300)
-def update_group(chat_id: int, title: str=None):
+def update_group(chat_id: int, title: str = None):
     """
     Try to update group information
 
