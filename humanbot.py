@@ -85,11 +85,16 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
         return
     utc_timestamp = int(date.timestamp())
 
-    session = models.Session()
-    chat = models.Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
-    session.add(chat)
-    session.commit()
-
+    for i in range(10):
+        try:
+            session = models.Session()
+            chat = models.Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
+            session.add(chat)
+            session.commit()
+            break
+        except:
+            session.rollback()
+            send_message_to_administrators('DB write ' + i + ' failed:\n' + traceback.format_exc())
     find_link_to_join(session, msg)
     session.close()
     models.Session.remove()
