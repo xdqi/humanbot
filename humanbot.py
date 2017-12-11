@@ -11,6 +11,7 @@ from expiringdict import ExpiringDict
 
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
+from telethon.errors.rpc_error_list import AuthKeyUnregisteredError
 from telethon.tl.types import \
     UpdateNewChannelMessage, UpdateShortMessage, UpdateShortChatMessage, UpdateNewMessage, \
     UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
@@ -404,11 +405,17 @@ def update_handler(update):
 def update_handler_wrapper(update):
     try:
         update_handler(update)
-    except Exception:
-        print('Exception raised on PID', getpid(), current_thread())
+    except Exception as e:
+        info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
         exc = traceback.format_exc()
-        print(exc)
-        send_message_to_administrators(exc)
+
+        # special process with common exceptions
+        if isinstance(e, ValueError) and 'encountered this peer before' in e.args[0]:
+            exc = e.args[0]
+        elif isinstance(e, AuthKeyUnregisteredError):
+            exc = e.args
+        print(info + exc)
+        send_message_to_administrators(info + exc)
 
 
 def main():
