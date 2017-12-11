@@ -5,13 +5,14 @@ from datetime import datetime, timezone
 from ftplib import FTP, Error as FTPError
 from io import BytesIO
 from requests import get
+from random import randint
 import re
 
 from expiringdict import ExpiringDict
 
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError
+from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError
 from telethon.tl.types import \
     UpdateNewChannelMessage, UpdateShortMessage, UpdateShortChatMessage, UpdateNewMessage, \
     UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
@@ -351,6 +352,9 @@ def update_message(update: Message):
 
     update_chat_generic(chat)
     update_user(update.from_id)
+    rnd = randint(0, 10)
+    if rnd == 5 and not isinstance(update.to_id, PeerUser):
+        client.send_read_acknowledge(client.get_entity(update.to_id), max_id=update.id)
 
 
 def update_message_from_chat(update: UpdateShortChatMessage):
@@ -436,7 +440,7 @@ def update_handler_wrapper(update):
         # special process with common exceptions
         if isinstance(e, ValueError) and 'encountered this peer before' in e.args[0]:
             exc = e.args[0]
-        elif isinstance(e, AuthKeyUnregisteredError):
+        elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
             exc = e.args
         print(info + exc)
         send_message_to_administrators(info + exc)
