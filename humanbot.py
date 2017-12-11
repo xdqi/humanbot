@@ -370,6 +370,8 @@ def update_message_from_user(update: UpdateShortMessage):
             link = update.message[8:].strip()
             print('joining private group', link)
             output = client.invoke(ImportChatInviteRequest(link))
+        elif update.message.startswith('/threads'):
+            output = thread_called_count
         if output:
             output = '```{}```'.format(output)
             print('sending message', output)
@@ -406,7 +408,10 @@ def update_handler(update):
         pass
 
 
+thread_called_count = {}
 def update_handler_wrapper(update):
+    prev_num = thread_called_count.get(current_thread().name, 0)
+    thread_called_count[current_thread().name] = prev_num + 1
     try:
         update_handler(update)
     except Exception as e:
