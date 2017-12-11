@@ -29,6 +29,13 @@ PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 
 
+def send_message_to_administrators(msg: str):
+    for admin in config.ADMIN_UIDS:
+        client.send_message(entity=client.get_entity(admin),
+                            message='```{}```'.format(msg.strip()),
+                            parse_mode='markdown',
+                            link_preview=False)
+
 def find_link_to_join(session, msg: str):
     public_links = PUBLIC_REGEX.findall(msg)
     private_links = INVITE_REGEX.findall(msg)
@@ -48,33 +55,29 @@ def find_link_to_join(session, msg: str):
                 new_group = models.Group(gid=gid, name=group.title, link=link)
                 session.add(new_group)
                 result = client.invoke(JoinChannelRequest(group))
-                for admin in config.ADMIN_UIDS:
-                    client.send_message(entity=client.get_entity(admin),
-                                        message='joined public group {}: {} having {} members,'
-                                                ' date {}.\nresult: {}'.format(
-                                            link,
-                                            group.title,
-                                            group.participants_count,
-                                            group.date,
-                                            result
-                                        )
-                                        )
+                send_message_to_administrators('joined public group {}: {} having {} members,'
+                                               ' date {}.\nresult: {}'.format(
+                                               link,
+                                               group.title,
+                                               group.participants_count,
+                                               group.date,
+                                               result
+                                               )
+                                               )
                 group_last_changed[gid] = True
 
     for link in private_links:
         invite_hash = link[-22:]
         group = client.invoke(CheckChatInviteRequest(invite_hash))
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
-            for admin in config.ADMIN_UIDS:
-                client.send_message(entity=client.get_entity(admin),
-                                    message='invitation from {}: {}, {} members\n'
-                                            'Join group with /joinprv {}'.format(
-                                        link,
-                                        group.title,
-                                        group.participants_count,
-                                        link[-22:]
-                                    )
-                                    )
+            send_message_to_administrators('invitation from {}: {}, {} members\n'
+                                           'Join group with /joinprv {}'.format(
+                                           link,
+                                           group.title,
+                                           group.participants_count,
+                                           link[-22:]
+                                           )
+            )
 
 
 def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
@@ -398,7 +401,9 @@ def update_handler_wrapper(update):
         update_handler(update)
     except Exception:
         print('Exception raised on PID', getpid(), current_thread())
-        traceback.print_exc()
+        exc = traceback.format_exc()
+        print(exc)
+        send_message_to_administrators(exc)
 
 
 def main():
