@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from ftplib import FTP, Error as FTPError
 from io import BytesIO
 from requests import get
+from requests.exceptions import ReadTimeout
 from random import randint
 import re
 
@@ -307,6 +308,15 @@ def remove_ocr_spaces(msg: str):
     return result
 
 
+def wget_retry(url, retry=10):
+    if not retry:
+        raise ReadTimeout(url)
+    try:
+        return get(url, timeout=10)
+    except ReadTimeout:
+        return wget_retry(url, retry - 1)
+
+
 def upload_ocr(buffer, path, filename) -> str:
     fullpath = '{}/{}'.format(path, filename)
     # upload to ftp server
@@ -321,7 +331,7 @@ def upload_ocr(buffer, path, filename) -> str:
 
     # do the ocr on server
     result = 'tgpic://kosaka/{}{}'.format(config.FTP_NAME, fullpath)
-    req = get(config.OCR_URL + fullpath, timeout=10)
+    req = wget_retry(config.OCR_URL + fullpath)
     ocr_result = req.json()  # type: dict
     if 'body' in ocr_result.keys():
         result += '\n'
