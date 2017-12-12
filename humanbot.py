@@ -323,7 +323,7 @@ def remove_ocr_spaces(msg: str):
     return result
 
 
-def wget_retry(url, retry=10):
+def wget_retry(url, retry=2):
     if not retry:
         raise ReadTimeout(url)
     try:
