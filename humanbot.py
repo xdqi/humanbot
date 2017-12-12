@@ -401,6 +401,12 @@ def update_message_from_user(update: UpdateShortMessage):
             output = client.invoke(ImportChatInviteRequest(link))
         elif update.message.startswith('/threads'):
             output = thread_called_count
+        elif update.message.startswith('/stat'):
+            output = 'Uptime: {}s\nProcessed: {}\nAverage: {}s'.format(
+                (datetime.now() - start_time).total_seconds(),
+                received_message,
+                total_used_time / received_message
+            )
         if output:
             output = '```{}```'.format(output)
             print('sending message', output)
@@ -438,9 +444,13 @@ def update_handler(update):
 
 
 thread_called_count = {}
+received_message = 0
+total_used_time = 0
+start_time = datetime.now()
 def update_handler_wrapper(update):
     prev_num = thread_called_count.get(current_thread().name, 0)
     thread_called_count[current_thread().name] = prev_num + 1
+    process_start_time = datetime.now()
     try:
         update_handler(update)
     except Exception as e:
@@ -454,6 +464,11 @@ def update_handler_wrapper(update):
             exc = e.args
         print(info + exc)
         send_message_to_administrators(info + exc)
+    process_end_time = datetime.now()
+    process_time = process_end_time - process_start_time
+    global received_message, total_used_time
+    received_message += 1
+    total_used_time += process_time.total_seconds()
 
 
 def main():
