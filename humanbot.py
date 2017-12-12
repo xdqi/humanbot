@@ -48,11 +48,11 @@ def send_message_to_administrators(msg: str):
             path,
             filename
         )
-    for admin in config.ADMIN_UIDS:
-        client.send_message(entity=client.get_entity(admin),
-                            message='```{}```'.format(msg.strip()),
-                            parse_mode='markdown',
-                            link_preview=False)
+    gid, peer_type = resolve_id(config.ADMIN_CHANNEL)
+    client.send_message(entity=client.get_entity(peer_type(gid)),
+                        message='```{}```'.format(msg.strip()),
+                        parse_mode='markdown',
+                        link_preview=False)
 
 
 def find_link_to_join(session, msg: str):
@@ -323,9 +323,15 @@ def remove_ocr_spaces(msg: str):
     return result
 
 
+class FakeResponse():
+    def json(self):
+        return {}
+
+
 def wget_retry(url, retry=2):
     if not retry:
-        raise ReadTimeout(url)
+        traceback.print_exc()
+        return FakeResponse()
     try:
         return get(url, timeout=10)
     except ReadTimeout:
@@ -344,6 +350,7 @@ def upload(buffer, path, filename) -> str:
     ftp.close()
     print('file uploaded')
     return fullpath
+
 
 def ocr(fullpath: str):
     # do the ocr on server
@@ -474,14 +481,19 @@ def update_handler_wrapper(update):
     except Exception as e:
         info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
         exc = traceback.format_exc()
+        send_to_admin = True
 
         # special process with common exceptions
         if isinstance(e, ValueError) and 'encountered this peer before' in e.args[0]:
             exc = e.args[0]
+            send_to_admin = False
         elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
             exc = e.args
+
         print(info + exc)
-        send_message_to_administrators(info + exc)
+        if send_to_admin:  # exception that should be send to administrator
+            send_message_to_administrators(info + exc)
+
     process_end_time = datetime.now()
     process_time = process_end_time - process_start_time
     global received_message, total_used_time
