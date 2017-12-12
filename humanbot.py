@@ -33,6 +33,21 @@ INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 
 
 def send_message_to_administrators(msg: str):
+    if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
+        buffer = BytesIO(msg.encode('utf-8'))
+        now = datetime.now()
+        date = now.strftime('%y%m%d')
+        timestamp = now.timestamp()
+        path = '/log/{}'.format(date)
+        thread_name = current_thread().name
+        filename = '{}-{}.txt'.format(thread_name, timestamp)
+        exception = msg.splitlines()[-1]
+        upload(buffer, path, filename)
+        msg = 'Long message: ... {}\nURL: http://fra2.dom.ain.kwsv.win{}/{}'.format(
+            exception,
+            path,
+            filename
+        )
     for admin in config.ADMIN_UIDS:
         client.send_message(entity=client.get_entity(admin),
                             message='```{}```'.format(msg.strip()),
@@ -317,7 +332,7 @@ def wget_retry(url, retry=10):
         return wget_retry(url, retry - 1)
 
 
-def upload_ocr(buffer, path, filename) -> str:
+def upload(buffer, path, filename) -> str:
     fullpath = '{}/{}'.format(path, filename)
     # upload to ftp server
     ftp = KosakaFTP()
@@ -327,8 +342,10 @@ def upload_ocr(buffer, path, filename) -> str:
     ftp.storbinary('STOR {}'.format(filename), buffer)
     buffer.close()
     ftp.close()
-    print('pic uploaded')
+    print('file uploaded')
+    return fullpath
 
+def ocr(fullpath: str):
     # do the ocr on server
     result = 'tgpic://kosaka/{}{}'.format(config.FTP_NAME, fullpath)
     req = wget_retry(config.OCR_URL + fullpath)
@@ -343,7 +360,8 @@ def upload_ocr(buffer, path, filename) -> str:
 
 def download_upload_ocr(media: MessageMediaPhoto):
     buffer, path, filename = download_file(media)
-    return upload_ocr(buffer, path, filename)
+    fullpath = upload(buffer, path, filename)
+    return ocr(fullpath)
 
 
 def update_message(update: Message):

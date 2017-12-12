@@ -11,7 +11,7 @@ from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update, Bot, Message, User, PhotoSize, Chat
 
 import config
-from humanbot import insert_message, update_user_real, update_group_real, upload_ocr
+from humanbot import insert_message, update_user_real, update_group_real, upload, ocr
 
 
 def update_user(user: User):
@@ -54,7 +54,8 @@ def picture(bot: Bot, update: Update):
         path = '/bot/{}'.format(now.strftime('%y%m%d'))
         filename = '{}.jpg'.format(file.file_id)
 
-        result = upload_ocr(buffer, path, filename)
+        fullpath = upload(buffer, path, filename)
+        result = ocr(fullpath)
         print('ocr result', result)
         text = result + '\n' + caption
 
