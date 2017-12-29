@@ -131,7 +131,7 @@ def peer_to_internal_id(peer):
     :param peer:
     :return:
     """
-    return get_peer_id(peer, True)
+    return get_peer_id(peer)
 
 
 def update_user_real(user_id, first_name, last_name, username, lang_code):
@@ -219,7 +219,7 @@ user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def update_user(user_id):
     if user_id in user_last_changed:  # user should be updated at a minute basis
         return
-    user = client.get_entity(user_id, force_fetch=True)  # type: User
+    user = client.get_entity(user_id)  # type: User
     user_last_changed[user_id] = True
     update_user_real(user_id, user.first_name, user.last_name, user.username, user.lang_code)
 
@@ -237,7 +237,7 @@ def update_group(chat_id: int, title: str = None):
         return
     id, type = resolve_id(chat_id)
     peer = type(id)
-    group = client.get_entity(peer, force_fetch=True)
+    group = client.get_entity(peer)
     group_last_changed[chat_id] = True
     if isinstance(group, (Chat, ChatFull)):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, None)
