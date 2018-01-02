@@ -12,7 +12,8 @@ from telegram import Update, Bot, Message, User, PhotoSize, Chat
 
 import config
 from utils import upload, ocr
-from models import insert_message, update_user_real, update_group_real
+from models import update_user_real, update_group_real
+from humanbot import insert_message
 
 
 def update_user(user: User):

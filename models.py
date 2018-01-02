@@ -1,6 +1,7 @@
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime
 from logging import getLogger
+from queue import Queue
 
 from sqlalchemy import engine_from_config
 from sqlalchemy.ext.declarative import declarative_base
@@ -8,7 +9,6 @@ from sqlalchemy import Column, Integer, Text, BigInteger, String
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 import config
-from humanbot import send_message_to_administrators, find_link_to_join
 from utils import get_now_timestamp
 
 Base = declarative_base()
@@ -65,34 +65,6 @@ engine = engine_from_config(config.DB_CONFIG, echo=not config.PRODUCTION)
 session_factory = sessionmaker(bind=engine)
 
 Session = scoped_session(session_factory)
-
-if __name__ == '__main__':
-    Base.metadata.create_all(engine)
-
-
-def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
-    if not msg:  # Not text message
-        return
-    utc_timestamp = int(date.timestamp())
-
-    for i in range(10):
-        try:
-            session = Session()
-            chat = Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
-            session.add(chat)
-            session.commit()
-            break
-        except:
-            session.rollback()
-            send_message_to_administrators('DB write {} failed:\n{}'.format(i, traceback.format_exc()))
-    find_link_to_join(session, msg)
-    session.close()
-    Session.remove()
-
-
-def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
-    utc_date = date.replace(tzinfo=timezone.utc)
-    insert_message(chat_id, user_id, msg, utc_date)
 
 
 def update_user_real(user_id, first_name, last_name, username, lang_code):
@@ -174,3 +146,7 @@ def update_group_real(chat_id, name, link):
         session.rollback()
     session.close()
     Session.remove()
+
+
+if __name__ == '__main__':
+    Base.metadata.create_all(engine)

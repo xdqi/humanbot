@@ -1,10 +1,12 @@
 import traceback
 from os import popen, getpid
-from threading import current_thread
-from datetime import datetime
+from threading import current_thread, Thread
+from datetime import datetime, timezone
 from io import BytesIO
 from random import randint
 import re
+from time import sleep
+from queue import Queue
 from logging import getLogger
 
 from expiringdict import ExpiringDict
@@ -24,9 +26,9 @@ from telethon.utils import get_peer_id, resolve_id
 
 import models
 import config
+from models import update_user_real, update_group_real, Session
+from utils import upload, ocr, get_now_timestamp
 import realbot
-from models import insert_message_local_timezone, update_user_real, update_group_real
-from utils import upload, ocr
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
@@ -100,6 +102,66 @@ def find_link_to_join(session, msg: str):
             )
 
 
+insert_worker_status = {}
+insert_queue = Queue()
+def message_insert_worker():
+    session = Session()
+
+    while True:
+        try:
+            message = insert_queue.get()  # type: Chat
+            if message is None:
+                break
+            session.add(message)
+            session.commit()
+            insert_queue.task_done()
+            insert_worker_status['last'] = get_now_timestamp()
+            insert_worker_status['size'] = insert_queue.qsize()
+        except:
+            session.rollback()
+            insert_queue.put(message)
+
+    session.close()
+    Session.remove()
+
+
+def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
+    if not msg:  # Not text message
+        return
+    utc_timestamp = int(date.timestamp())
+
+    chat = models.Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
+
+    insert_queue.put(chat)
+    find_link_queue.put(msg)
+
+
+find_link_worker_status = {}
+find_link_queue = Queue()
+def auto_add_chat_worker():
+    session = Session()
+
+    while True:
+        try:
+            message = find_link_queue.get()  # type: str
+            if message is None:
+                break
+            find_link_to_join(session, message)
+            find_link_queue.task_done()
+            find_link_worker_status['last'] = get_now_timestamp()
+            find_link_worker_status['size'] = find_link_queue.qsize()
+        except:
+            session.rollback()
+
+    session.close()
+    Session.remove()
+
+
+def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
+    utc_date = date.replace(tzinfo=timezone.utc)
+    insert_message(chat_id, user_id, msg, utc_date)
+
+
 def peer_to_internal_id(peer):
     """
     Get bot marked ID
@@ -112,9 +174,10 @@ def peer_to_internal_id(peer):
 
 user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def update_user(user_id):
+    return
     if user_id in user_last_changed:  # user should be updated at a minute basis
         return
-    user = client.get_entity(user_id)  # type: User
+    user = client.get_entity(PeerUser(user_id))  # type: User
     user_last_changed[user_id] = True
     update_user_real(user_id, user.first_name, user.last_name, user.username, user.lang_code)
 
@@ -128,6 +191,7 @@ def update_group(chat_id: int, title: str = None):
     :param title: New group title (optional)
     :return: None
     """
+    return
     if chat_id in group_last_changed:  # user should be updated at a minute basis
         return
     id, type = resolve_id(chat_id)
@@ -207,9 +271,6 @@ def update_message(update: Message):
 
     update_chat_generic(chat)
     update_user(update.from_id)
-    rnd = randint(0, 10)
-    if rnd == 5 and not isinstance(update.to_id, PeerUser):
-        client.send_read_acknowledge(client.get_entity(update.to_id), max_id=update.id)
 
 
 def update_message_from_chat(update: UpdateShortChatMessage):
@@ -251,6 +312,14 @@ def update_message_from_user(update: UpdateShortMessage):
                 (datetime.now() - start_time).total_seconds(),
                 received_message,
                 total_used_time / received_message
+            )
+        elif update.message.startswith('/workers'):
+            output = 'Input Message Worker: {} seconds ago, size {}\n' \
+                     'Find Link Worker: {} seconds ago, size {}'.format(
+                get_now_timestamp() - insert_worker_status['last'],
+                insert_worker_status['size'],
+                get_now_timestamp() - find_link_worker_status['last'],
+                find_link_worker_status['size']
             )
         if output:
             output = '```{}```'.format(output)
@@ -327,8 +396,7 @@ def main():
                             api_id=config.TG_API_ID,
                             api_hash=config.TG_API_HASH,
                             proxy=None,
-                            update_workers=8,
-                            spawn_read_thread=False)
+                            update_workers=8)
     print('INFO: Connecting to Telegram Servers...')
     client.connect()
 
@@ -348,7 +416,10 @@ def main():
 
     client.add_update_handler(update_handler_wrapper)
     realbot.main()
-    client.idle()
+    Thread(target=auto_add_chat_worker).start()
+    Thread(target=message_insert_worker).start()
+    while 1:
+        sleep(1)
     client.disconnect()
 
 
