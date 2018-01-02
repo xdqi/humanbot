@@ -1,13 +1,11 @@
 import traceback
 from os import popen, getpid
 from threading import current_thread
-from datetime import datetime, timezone
-from ftplib import FTP, Error as FTPError
+from datetime import datetime
 from io import BytesIO
-from requests import get
-from requests.exceptions import ReadTimeout
 from random import randint
 import re
+from logging import getLogger
 
 from expiringdict import ExpiringDict
 
@@ -18,18 +16,21 @@ from telethon.tl.types import \
     UpdateNewChannelMessage, UpdateShortMessage, UpdateShortChatMessage, UpdateNewMessage, \
     UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
     MessageActionChatEditTitle, \
-    PeerUser, InputUser, User, PeerChat, Chat, ChatFull, PeerChannel, Channel, ChannelFull, \
-    Photo, PhotoSize, FileLocation, ChatInvite, ChatInviteAlready
+    PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
+    ChatInvite
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
-from telethon.utils import get_input_user, get_peer_id, get_input_peer, resolve_id
+from telethon.utils import get_peer_id, resolve_id
 
 import models
 import config
 import realbot
+from models import insert_message_local_timezone, update_user_real, update_group_real
+from utils import upload, ocr
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
+logger = getLogger(__name__)
 
 
 def send_message_to_administrators(msg: str):
@@ -99,31 +100,6 @@ def find_link_to_join(session, msg: str):
             )
 
 
-def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
-    if not msg:  # Not text message
-        return
-    utc_timestamp = int(date.timestamp())
-
-    for i in range(10):
-        try:
-            session = models.Session()
-            chat = models.Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
-            session.add(chat)
-            session.commit()
-            break
-        except:
-            session.rollback()
-            send_message_to_administrators('DB write {} failed:\n{}'.format(i, traceback.format_exc()))
-    find_link_to_join(session, msg)
-    session.close()
-    models.Session.remove()
-
-
-def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
-    utc_date = date.replace(tzinfo=timezone.utc)
-    insert_message(chat_id, user_id, msg, utc_date)
-
-
 def peer_to_internal_id(peer):
     """
     Get bot marked ID
@@ -132,87 +108,6 @@ def peer_to_internal_id(peer):
     :return:
     """
     return get_peer_id(peer)
-
-
-def update_user_real(user_id, first_name, last_name, username, lang_code):
-    """
-    Update user information to database
-
-    :param user_id:
-    :param first_name:
-    :param last_name:
-    :param username:
-    :param lang_code: Optional
-    :return:
-    """
-    print(user_id, first_name, last_name, username, lang_code)
-
-    session = models.Session()
-    user = session.query(models.User).filter(models.User.uid == user_id).one_or_none()
-    if not user:  # new user
-        user = models.User(uid=user_id,
-                           first_name=first_name,
-                           last_name=last_name,
-                           username=username,
-                           lang_code=lang_code)
-
-        session.add(user)
-    else:  # existing user
-        same = user.first_name == first_name and user.last_name == last_name and user.username == username
-        if not same:  # information changed
-            user.first_name = first_name
-            user.last_name = last_name
-            user.username = username
-            user.lang_code = lang_code
-            change = models.UsernameHistory(uid=user_id,
-                                            username=username,
-                                            first_name=first_name,
-                                            last_name=last_name,
-                                            lang_code=lang_code,
-                                            date=datetime.now().timestamp()
-                                            )
-            session.add(change)
-    try:
-        session.commit()
-    except:  # PRIMARY KEY CONSTRAINT
-        session.rollback()
-    session.close()
-    models.Session.remove()
-
-
-def update_group_real(chat_id, name, link):
-    """
-    Update group information to database
-
-    :param chat_id: Group ID (bot marked format)
-    :param name: Group Name
-    :param link: Group Public Username (supergroup only)
-    :return:
-    """
-    print(chat_id, name, link)
-
-    session = models.Session()
-    group = session.query(models.Group).filter(models.Group.gid == chat_id).one_or_none()
-    if not group:  # new group
-        group = models.Group(gid=chat_id, name=name, link=link)
-        session.add(group)
-    else:  # existing group
-        same = group.name == name and group.link == link
-        if not same:  # information changed
-            group.name = name
-            group.link = link
-            change = models.GroupHistory(gid=chat_id,
-                                         name=name,
-                                         link=link,
-                                         date=datetime.now().timestamp()
-                                         )
-            session.add(change)
-    try:
-        session.commit()
-    except:  # PRIMARY KEY CONSTRAINT
-        session.rollback()
-    session.close()
-    models.Session.remove()
 
 
 user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
@@ -273,24 +168,6 @@ def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
     update_group(chat_id, name)
 
 
-class KosakaFTP(FTP):
-    def __init__(self, *args, **kwargs):
-        super().__init__(timeout=5, *args, **kwargs)
-
-    def cdp(self, directory):
-        if directory != "":
-            try:
-                self.cwd(directory)
-                print('cwd')
-            except FTPError:
-                print('go up')
-                self.cdp("/".join(directory.split("/")[:-1]))
-                print('mkd')
-                self.mkd(directory)
-                print('cwd1')
-                self.cwd(directory)
-
-
 def download_file(media: MessageMediaPhoto):
     print('pic to download')
     # download from telegram server
@@ -306,63 +183,6 @@ def download_file(media: MessageMediaPhoto):
     filename = '{}.jpg'.format(location.local_id)
 
     return buffer, path, filename
-
-
-def remove_ocr_spaces(msg: str):
-    parts = msg.split(' ')
-    result = ''
-    for i in range(len(parts) - 1):
-        result += parts[i]
-
-        prev = parts[i][-1]
-        after = parts[i + 1][0]
-        if ord(prev) < 1328 and ord(after) < 1328:  # detect latin/cyrillic character only
-            result += ' '
-
-    result += parts[-1]
-    return result
-
-
-class FakeResponse():
-    def json(self):
-        return {}
-
-
-def wget_retry(url, retry=2):
-    if not retry:
-        traceback.print_exc()
-        return FakeResponse()
-    try:
-        return get(url, timeout=10)
-    except ReadTimeout:
-        return wget_retry(url, retry - 1)
-
-
-def upload(buffer, path, filename) -> str:
-    fullpath = '{}/{}'.format(path, filename)
-    # upload to ftp server
-    ftp = KosakaFTP()
-    ftp.connect(**config.FTP_SERVER)
-    ftp.login(**config.FTP_CREDENTIAL)
-    ftp.cdp(path)
-    ftp.storbinary('STOR {}'.format(filename), buffer)
-    buffer.close()
-    ftp.close()
-    print('file uploaded')
-    return fullpath
-
-
-def ocr(fullpath: str):
-    # do the ocr on server
-    result = 'tgpic://kosaka/{}{}'.format(config.FTP_NAME, fullpath)
-    req = wget_retry(config.OCR_URL + fullpath)
-    ocr_result = req.json()  # type: dict
-    if 'body' in ocr_result.keys():
-        result += '\n'
-        result += remove_ocr_spaces(ocr_result['body'])
-    print('pic ocred\n', result)
-
-    return result
 
 
 def download_upload_ocr(media: MessageMediaPhoto):
