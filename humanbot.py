@@ -8,6 +8,7 @@ from time import sleep
 from queue import Queue
 from logging import getLogger, INFO, WARNING, basicConfig
 from pdb import Pdb
+from random import random
 from signal import signal, SIGUSR1
 
 from expiringdict import ExpiringDict
@@ -250,6 +251,8 @@ def update_message(update: Message):
 
     update_chat_generic(chat)
     update_user(update.from_id)
+    if random() < 1 / 10 and not isinstance(update.to_id, PeerUser):
+        client.send_read_acknowledge(client.get_entity(update.to_id), max_id=update.id)
 
 
 def update_message_from_chat(update: UpdateShortChatMessage):
