@@ -32,12 +32,12 @@ from models import update_user_real, update_group_real, Session
 from utils import upload, ocr, get_now_timestamp, send_message_to_administrators
 import realbot
 
-
-PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
-INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 logger = getLogger(__name__)
 
 
+PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
+INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
+private_link_sent = ExpiringDict(max_len=100, max_age_seconds=600)
 def find_link_to_join(session, msg: str):
     public_links = PUBLIC_REGEX.findall(msg)
     private_links = INVITE_REGEX.findall(msg)
@@ -71,6 +71,9 @@ def find_link_to_join(session, msg: str):
         invite_hash = link[-22:]
         group = client.invoke(CheckChatInviteRequest(invite_hash))
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
+            if invite_hash in private_link_sent:
+                continue
+            private_link_sent[invite_hash] = True
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join group with /joinprv {}'.format(
                     link,
