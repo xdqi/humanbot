@@ -2,10 +2,13 @@ import traceback
 from datetime import datetime
 from ftplib import FTP, Error as FTPError
 from logging import getLogger
+from io import BytesIO
+from threading import current_thread
 
 from requests import get, ReadTimeout
 
 import config
+from senders import bot
 
 
 logger = getLogger(__name__)
@@ -19,13 +22,14 @@ class KosakaFTP(FTP):
         if directory != "":
             try:
                 self.cwd(directory)
-                print('cwd')
+                logger.info('cd to %s', directory)
             except FTPError:
-                print('go up')
-                self.cdp("/".join(directory.split("/")[:-1]))
-                print('mkd')
+                new_dir = "/".join(directory.split("/")[:-1])
+                logger.debug('go up to %s', new_dir)
+                self.cdp(new_dir)
+                logger.debug('mkdir %s', directory)
                 self.mkd(directory)
-                print('cwd1')
+                logger.debug('cd %s', directory)
                 self.cwd(directory)
 
 
@@ -49,14 +53,14 @@ class FakeResponse():
         return {}
 
 
-def wget_retry(url, retry=2):
-    if not retry:
+def wget_retry(url, remaining_retry=1):
+    if remaining_retry == 0:
         traceback.print_exc()
         return FakeResponse()
     try:
         return get(url, timeout=10)
     except ReadTimeout:
-        return wget_retry(url, retry - 1)
+        return wget_retry(url, remaining_retry - 1)
 
 
 def upload(buffer, path, filename) -> str:
@@ -69,7 +73,7 @@ def upload(buffer, path, filename) -> str:
     ftp.storbinary('STOR {}'.format(filename), buffer)
     buffer.close()
     ftp.close()
-    print('file uploaded')
+    logger.info('File uploaded to %s', fullpath)
     return fullpath
 
 
@@ -81,10 +85,33 @@ def ocr(fullpath: str):
     if 'body' in ocr_result.keys():
         result += '\n'
         result += remove_ocr_spaces(ocr_result['body'])
-    print('pic ocred\n', result)
+    logger.info('pic ocred\n%s', result)
 
     return result
 
 
 def get_now_timestamp() -> int:
     return int(datetime.now().timestamp())
+
+
+def send_message_to_administrators(msg: str):
+    logger.info('Sending to administrators: \n%s', msg)
+    if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
+        buffer = BytesIO(msg.encode('utf-8'))
+        now = datetime.now()
+        date = now.strftime('%y%m%d')
+        timestamp = now.timestamp()
+        path = '/log/{}'.format(date)
+        thread_name = current_thread().name
+        filename = '{}-{}.txt'.format(thread_name, timestamp)
+        exception = msg.splitlines()[-1]
+        upload(buffer, path, filename)
+        msg = 'Long message: ... {}\nURL: http://fra2.dom.ain.kwsv.win{}/{}'.format(
+            exception,
+            path,
+            filename
+        )
+    bot.send_message(chat_id=config.ADMIN_CHANNEL,
+                     text='```{}```'.format(msg.strip()),
+                     parse_mode='markdown',
+                     disable_web_page_preview=False)

@@ -78,7 +78,7 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     :param lang_code: Optional
     :return:
     """
-    print(user_id, first_name, last_name, username, lang_code)
+    logger.debug('User %s %s %s %s %s', user_id, first_name, last_name, username, lang_code)
 
     session = Session()
     user = session.query(User).filter(User.uid == user_id).one_or_none()
@@ -122,7 +122,7 @@ def update_group_real(chat_id, name, link):
     :param link: Group Public Username (supergroup only)
     :return:
     """
-    print(chat_id, name, link)
+    logger.debug('group %s %s %s', chat_id, name, link)
 
     session = Session()
     group = session.query(Group).filter(Group.gid == chat_id).one_or_none()

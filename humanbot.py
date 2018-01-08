@@ -3,15 +3,15 @@ from os import popen, getpid
 from threading import current_thread, Thread
 from datetime import datetime, timezone
 from io import BytesIO
-from random import randint
 import re
 from time import sleep
 from queue import Queue
-from logging import getLogger
+from logging import getLogger, INFO, WARNING, basicConfig
+from pdb import Pdb
+from signal import signal, SIGUSR1
 
 from expiringdict import ExpiringDict
 
-from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError
 from telethon.tl.types import \
@@ -24,38 +24,17 @@ from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelReque
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.utils import get_peer_id, resolve_id
 
+from senders import client
 import models
 import config
 from models import update_user_real, update_group_real, Session
-from utils import upload, ocr, get_now_timestamp
+from utils import upload, ocr, get_now_timestamp, send_message_to_administrators
 import realbot
+
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 logger = getLogger(__name__)
-
-
-def send_message_to_administrators(msg: str):
-    if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
-        buffer = BytesIO(msg.encode('utf-8'))
-        now = datetime.now()
-        date = now.strftime('%y%m%d')
-        timestamp = now.timestamp()
-        path = '/log/{}'.format(date)
-        thread_name = current_thread().name
-        filename = '{}-{}.txt'.format(thread_name, timestamp)
-        exception = msg.splitlines()[-1]
-        upload(buffer, path, filename)
-        msg = 'Long message: ... {}\nURL: http://fra2.dom.ain.kwsv.win{}/{}'.format(
-            exception,
-            path,
-            filename
-        )
-    gid, peer_type = resolve_id(config.ADMIN_CHANNEL)
-    client.send_message(entity=client.get_entity(peer_type(gid)),
-                        message='```{}```'.format(msg.strip()),
-                        parse_mode='markdown',
-                        link_preview=False)
 
 
 def find_link_to_join(session, msg: str):
@@ -63,7 +42,7 @@ def find_link_to_join(session, msg: str):
     private_links = INVITE_REGEX.findall(msg)
 
     if public_links + private_links:
-        print('found links', 'public:', public_links, 'private:', private_links)
+        logger.info('found links. public: %s, private: %s', public_links, private_links)
 
     for link in public_links:
         if link in config.GROUP_BLACKLIST:  # false detection of private link
@@ -78,13 +57,12 @@ def find_link_to_join(session, msg: str):
                 session.add(new_group)
                 result = client.invoke(JoinChannelRequest(group))
                 send_message_to_administrators('joined public group {}: {} having {} members,'
-                                               ' date {}.\nresult: {}'.format(
-                    link,
-                    group.title,
-                    group.participants_count,
-                    group.date,
-                    result
-                )
+                                               ' date {}.'.format(
+                        link,
+                        group.title,
+                        group.participants_count,
+                        group.date,
+                    )
                 )
                 group_last_changed[gid] = True
 
@@ -94,11 +72,11 @@ def find_link_to_join(session, msg: str):
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join group with /joinprv {}'.format(
-                link,
-                group.title,
-                group.participants_count,
-                link[-22:]
-            )
+                    link,
+                    group.title,
+                    group.participants_count,
+                    link[-22:]
+                )
             )
 
 
@@ -174,10 +152,13 @@ def peer_to_internal_id(peer):
 
 user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def update_user(user_id):
-    return
     if user_id in user_last_changed:  # user should be updated at a minute basis
         return
-    user = client.get_entity(PeerUser(user_id))  # type: User
+    try:
+        user = client.get_entity(PeerUser(user_id))  # type: User
+    except (KeyError, TypeError) as e:
+        logger.warning('Get user info failed: %s', user_id)
+        return
     user_last_changed[user_id] = True
     update_user_real(user_id, user.first_name, user.last_name, user.username, user.lang_code)
 
@@ -191,7 +172,6 @@ def update_group(chat_id: int, title: str = None):
     :param title: New group title (optional)
     :return: None
     """
-    return
     if chat_id in group_last_changed:  # user should be updated at a minute basis
         return
     id, type = resolve_id(chat_id)
@@ -233,12 +213,11 @@ def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
 
 
 def download_file(media: MessageMediaPhoto):
-    print('pic to download')
     # download from telegram server
     buffer = BytesIO()
     client.download_media(media, buffer)
     buffer.seek(0)
-    print('pic downloaded')
+    logger.info('pic downloaded')
 
     # calculate path
     original = media.photo.sizes[-1]  # type: PhotoSize
@@ -286,24 +265,24 @@ def update_message_from_user(update: UpdateShortMessage):
         output = ''
         if update.message.startswith('/exec'):
             command = update.message[5:].strip()
-            print('executing command', command)
+            logger.info('executing command %s', command)
             with popen(command, 'r') as f:
                 output = f.read()
         elif update.message.startswith('/py'):
             script = update.message[3:].strip()
-            print('evaluating script', script)
+            logger.info('evaluating script %s', script)
             output = repr(eval(script))
         elif update.message.startswith('/joinpub'):
             link = update.message[8:].strip()
-            print('joining public group', link)
+            logger.info('joining public group %s', link)
             output = client.invoke(JoinChannelRequest(client.get_entity(link)))
         elif update.message.startswith('/leavepub'):
             link = update.message[9:].strip()
-            print('leaving public group', link)
+            logger.info('leaving public group %s', link)
             output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
         elif update.message.startswith('/joinprv'):
             link = update.message[8:].strip()
-            print('joining private group', link)
+            logger.info('joining private group %s', link)
             output = client.invoke(ImportChatInviteRequest(link))
         elif update.message.startswith('/threads'):
             output = thread_called_count
@@ -323,7 +302,7 @@ def update_message_from_user(update: UpdateShortMessage):
             )
         if output:
             output = '```{}```'.format(output)
-            print('sending message', output)
+            logger.info('sending message %s', output)
             client.send_message(entity=update.user_id,
                                 message=output,
                                 reply_to=update.id,
@@ -333,7 +312,7 @@ def update_message_from_user(update: UpdateShortMessage):
 
 
 def update_handler(update):
-    print('humanbot', update)
+    logger.debug('humanbot %s', update)
     if isinstance(update, (UpdateNewChannelMessage, UpdateNewMessage)):  # message from group/user
         if isinstance(update.message, Message):  # message
             update_message(update.message)
@@ -379,7 +358,7 @@ def update_handler_wrapper(update):
         elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
             exc = e.args
 
-        print(info + exc)
+        logger.error(info + exc)
         if send_to_admin:  # exception that should be send to administrator
             send_message_to_administrators(info + exc)
 
@@ -391,17 +370,14 @@ def update_handler_wrapper(update):
 
 
 def main():
-    global client
-    client = TelegramClient(session=config.SESSION_NAME,
-                            api_id=config.TG_API_ID,
-                            api_hash=config.TG_API_HASH,
-                            proxy=None,
-                            update_workers=8)
-    print('INFO: Connecting to Telegram Servers...')
+    basicConfig(level=INFO)
+    logger.setLevel(INFO)
+    getLogger('telethon').setLevel(WARNING)
+    logger.info('Connecting to Telegram Servers...')
     client.connect()
 
     if not client.is_user_authorized():
-        print('INFO: Unauthorized user')
+        logger.info('Unauthorized user')
         client.send_code_request(config.PHONE_NUMBER)
         code_ok = False
         while not code_ok:
@@ -412,12 +388,13 @@ def main():
                 password = input('Two step verification enabled. Please enter your password: ')
                 code_ok = client.sign_in(password=password)
 
-    print('INFO: Client initialized succesfully!')
+    logger.info('Client initialized succesfully!')
 
     client.add_update_handler(update_handler_wrapper)
     realbot.main()
     Thread(target=auto_add_chat_worker).start()
     Thread(target=message_insert_worker).start()
+    signal(SIGUSR1, lambda x, y: Pdb().set_trace(y))
     while 1:
         sleep(1)
     client.disconnect()

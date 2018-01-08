@@ -4,6 +4,7 @@ from threading import current_thread
 from typing import List
 from io import BytesIO
 from datetime import datetime
+from logging import getLogger, INFO, DEBUG
 
 from expiringdict import ExpiringDict
 
@@ -14,6 +15,9 @@ import config
 from utils import upload, ocr
 from models import update_user_real, update_group_real
 from humanbot import insert_message
+
+
+logger = getLogger(__name__)
 
 
 def update_user(user: User):
@@ -58,28 +62,28 @@ def picture(bot: Bot, update: Update):
 
         fullpath = upload(buffer, path, filename)
         result = ocr(fullpath)
-        print('ocr result', result)
+        logger.info('ocr result:\n%s', result)
         text = result + '\n' + caption
 
     insert_message(msg.chat_id, user.id, text, msg.date)
-    print('reached or not')
     update_user(user)
     update_group(bot, msg.chat_id)
 
 
 def log_message(bot: Bot, update: Update):
-    print('realbot ', update)
+    logger.debug('realbot %s', update)
 
 
 def error_handler(bot: Bot, update: Update, error: Exception):
     try:
         raise error
     except:
-        print('Exception raised on PID', getpid(), current_thread())
+        logger.error('Exception raised on PID %s %s', getpid(), current_thread())
         traceback.print_exc()
 
 
 def main():
+    logger.setLevel(INFO)
     updater = Updater(token=config.BOT_TOKEN)
 
     # set up webhook
@@ -87,7 +91,7 @@ def main():
                           port=config.BOT_WEBHOOK_PORT,
                           url_path=config.BOT_WEBHOOK_PATH)
     res = updater.bot.set_webhook(url=config.BOT_WEBHOOK_URL)
-    print('Start webhook returns', res)
+    logger.info('Start webhook returns %s', res)
 
     # set up message handlers
     dispatcher = updater.dispatcher
