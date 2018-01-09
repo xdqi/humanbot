@@ -48,10 +48,10 @@ def find_link_to_join(session, msg: str):
     for link in public_links:
         if link in config.GROUP_BLACKLIST:  # false detection of private link
             continue
-        group = client.get_entity(link)
         if link in recent_found_links:
             continue
         recent_found_links[link] = True
+        group = client.get_entity(link)
         if isinstance(group, Chat) or (isinstance(group, Channel) and not group.broadcast):
             gid = peer_to_internal_id(group)
             group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
