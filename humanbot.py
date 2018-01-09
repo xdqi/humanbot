@@ -237,7 +237,11 @@ def download_file(media: MessageMediaPhoto):
 
 
 def download_upload_ocr(media: MessageMediaPhoto):
-    buffer, path, filename = download_file(media)
+    try:
+        buffer, path, filename = download_file(media)
+    except (ValueError, RuntimeError, OSError):
+        return 'tgpic://download-failed'
+
     fullpath = upload(buffer, path, filename)
     return ocr(fullpath)
 
