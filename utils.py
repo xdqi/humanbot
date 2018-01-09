@@ -27,12 +27,15 @@ class KosakaFTP(FTP):
             try:
                 self.cwd(directory)
                 logger.info('cd to %s', directory)
-            except FTPError:
+            except FTPError:  # 550 No such file or directory
                 new_dir = "/".join(directory.split("/")[:-1])
                 logger.debug('go up to %s', new_dir)
                 self.cdp(new_dir)
                 logger.debug('mkdir %s', directory)
-                self.mkd(directory)
+                try:
+                    self.mkd(directory)
+                except FTPError:  # 550 File exists
+                    pass
                 logger.debug('cd %s', directory)
                 self.cwd(directory)
 
