@@ -29,11 +29,10 @@ from senders import client
 import models
 import config
 from models import update_user_real, update_group_real, Session
-from utils import upload, ocr, get_now_timestamp, send_message_to_administrators
+from utils import upload, ocr, get_now_timestamp, send_message_to_administrators, is_chinese_group
 import realbot
 
 logger = getLogger(__name__)
-
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
@@ -59,6 +58,8 @@ def find_link_to_join(session, msg: str):
                 link = group.username if hasattr(group, 'username') else None
                 new_group = models.Group(gid=gid, name=group.title, link=link)
                 session.add(new_group)
+                if not is_chinese_group(group):  # we do it after logging it to our system
+                    continue
                 result = client.invoke(JoinChannelRequest(group))
                 send_message_to_administrators('joined public group {}: {} having {} members,'
                                                ' date {}.'.format(

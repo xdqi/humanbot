@@ -1,15 +1,19 @@
+import re
 import traceback
 from datetime import datetime
 from ftplib import FTP, Error as FTPError
 from logging import getLogger
 from io import BytesIO
 from threading import current_thread
+from math import ceil
 
 from requests import get, ReadTimeout
 
-import config
-from senders import bot
+from telethon.tl.functions.messages import GetHistoryRequest
+from telethon.tl.types import Channel
 
+import config
+from senders import bot, client
 
 logger = getLogger(__name__)
 
@@ -115,3 +119,23 @@ def send_message_to_administrators(msg: str):
                      text='```{}```'.format(msg.strip()),
                      parse_mode='markdown',
                      disable_web_page_preview=False)
+
+
+CHINESE_REGEX = re.compile(r"\u4e00-\u9fff")
+def is_chinese_message(message: str):
+    return bool(CHINESE_REGEX.findall(message))
+
+
+def is_chinese_group(group: Channel):
+    result = client.invoke(GetHistoryRequest(
+        peer=group,
+        offset_id=0,
+        offset_date=None,
+        add_offset=0,
+        limit=100,
+        max_id=0,
+        min_id=0,
+        hash=0,
+    ))
+    # for 100 messages, at least 10 should be chinese text
+    return sum(is_chinese_message(m.message) > 0 for m in result.messages) > ceil(len(result.messages) / 10)
