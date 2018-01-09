@@ -37,7 +37,7 @@ logger = getLogger(__name__)
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
-private_link_sent = ExpiringDict(max_len=100, max_age_seconds=600)
+recent_found_links = ExpiringDict(max_len=1000, max_age_seconds=3600)
 def find_link_to_join(session, msg: str):
     public_links = PUBLIC_REGEX.findall(msg)
     private_links = INVITE_REGEX.findall(msg)
@@ -49,6 +49,9 @@ def find_link_to_join(session, msg: str):
         if link in config.GROUP_BLACKLIST:  # false detection of private link
             continue
         group = client.get_entity(link)
+        if link in recent_found_links:
+            continue
+        recent_found_links[link] = True
         if isinstance(group, Chat) or (isinstance(group, Channel) and not group.broadcast):
             gid = peer_to_internal_id(group)
             group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
@@ -71,9 +74,9 @@ def find_link_to_join(session, msg: str):
         invite_hash = link[-22:]
         group = client.invoke(CheckChatInviteRequest(invite_hash))
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
-            if invite_hash in private_link_sent:
+            if invite_hash in recent_found_links:
                 continue
-            private_link_sent[invite_hash] = True
+            recent_found_links[invite_hash] = True
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join group with /joinprv {}'.format(
                     link,
