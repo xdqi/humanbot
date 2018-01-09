@@ -292,6 +292,10 @@ def update_message_from_user(update: UpdateShortMessage):
             output = client.invoke(JoinChannelRequest(client.get_entity(link)))
         elif update.message.startswith('/leavepub'):
             link = update.message[9:].strip()
+            try:
+                link = int(link)
+            except ValueError:
+                pass
             logger.info('leaving public group %s', link)
             output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
         elif update.message.startswith('/joinprv'):
