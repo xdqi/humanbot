@@ -8,6 +8,7 @@ from threading import current_thread
 from math import ceil
 
 from requests import get, ReadTimeout
+from raven import Client as RavenClient
 
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel
@@ -16,6 +17,7 @@ import config
 from senders import bot, client
 
 logger = getLogger(__name__)
+raven_client = RavenClient(config.RAVEN_DSN)
 
 
 class KosakaFTP(FTP):
@@ -142,3 +144,6 @@ def is_chinese_group(group: Channel):
     ))
     # for 100 messages, at least 10 should be chinese text
     return sum(is_chinese_message(m.message) > 0 for m in result.messages) > ceil(len(result.messages) / 10)
+
+def report_exception():
+    raven_client.captureException()

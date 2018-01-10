@@ -19,6 +19,7 @@ FTP_SERVER = dict(host='ftp-server', port=21)
 FTP_CREDENTIAL = dict(user='user', passwd='pass')
 FTP_NAME = 'example-xxx'
 OCR_URL = 'http://typ-style-ocr-server-url/http/picture-server-http-url'
+RAVEN_DSN = 'https://user:pass@sentry.io/id'
 
 DB_CONFIG = {
     'sqlalchemy.url': 'sqlite:///output.db'

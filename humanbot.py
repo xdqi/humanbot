@@ -29,7 +29,8 @@ from senders import client
 import models
 import config
 from models import update_user_real, update_group_real, Session
-from utils import upload, ocr, get_now_timestamp, send_message_to_administrators, is_chinese_group
+from utils import upload, ocr, get_now_timestamp, send_message_to_administrators, is_chinese_group, \
+    report_exception
 import realbot
 
 logger = getLogger(__name__)
@@ -104,6 +105,7 @@ def message_insert_worker():
             insert_worker_status['last'] = get_now_timestamp()
             insert_worker_status['size'] = insert_queue.qsize()
         except:
+            report_exception()
             session.rollback()
             insert_queue.put(message)
 
@@ -137,7 +139,9 @@ def auto_add_chat_worker():
             find_link_worker_status['last'] = get_now_timestamp()
             find_link_worker_status['size'] = find_link_queue.qsize()
         except:
+            report_exception()
             session.rollback()
+            find_link_queue.put(message)
 
     session.close()
     Session.remove()
@@ -166,6 +170,7 @@ def update_user(user_id):
         user = client.get_entity(PeerUser(user_id))  # type: User
     except (KeyError, TypeError) as e:
         logger.warning('Get user info failed: %s', user_id)
+        report_exception()
         return
     user_last_changed[user_id] = True
     update_user_real(user_id, user.first_name, user.last_name, user.username, user.lang_code)
@@ -240,6 +245,7 @@ def download_upload_ocr(media: MessageMediaPhoto):
     try:
         buffer, path, filename = download_file(media)
     except (ValueError, RuntimeError, OSError):
+        report_exception()
         return 'tgpic://download-failed'
 
     fullpath = upload(buffer, path, filename)
@@ -365,6 +371,7 @@ def update_handler_wrapper(update):
     try:
         update_handler(update)
     except Exception as e:
+        report_exception()
         info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
         exc = traceback.format_exc()
         send_to_admin = True

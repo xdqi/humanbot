@@ -7,3 +7,5 @@ sqlalchemy
 mysql-connector-python
 
 expiringdict
+
+raven

@@ -12,7 +12,7 @@ from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update, Bot, Message, User, PhotoSize, Chat
 
 import config
-from utils import upload, ocr
+from utils import upload, ocr, report_exception
 from models import update_user_real, update_group_real
 from humanbot import insert_message
 
@@ -78,6 +78,7 @@ def error_handler(bot: Bot, update: Update, error: Exception):
     try:
         raise error
     except:
+        report_exception()
         logger.error('Exception raised on PID %s %s', getpid(), current_thread())
         traceback.print_exc()
 
