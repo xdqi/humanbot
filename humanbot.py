@@ -296,7 +296,7 @@ def update_message_from_user(update: UpdateShortMessage):
             link = update.message[8:].strip()
             logger.info('joining public group %s', link)
             output = client.invoke(JoinChannelRequest(client.get_entity(link)))
-        elif update.message.startswith('/leavepub'):
+        elif update.message.startswith('/leave'):
             link = update.message[9:].strip()
             try:
                 link = int(link)
