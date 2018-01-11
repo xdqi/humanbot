@@ -114,10 +114,12 @@ def message_insert_worker():
 
 
 def threads_handler(bot, update, text):
+    global thread_called_count
     return str(thread_called_count)
 
 
 def statistics_handler(bot, update, text):
+    global start_time, received_message, total_used_time
     return 'Uptime: {}s\nProcessed: {}\nAverage: {}s'.format(
                 (datetime.now() - start_time).total_seconds(),
                 received_message,
@@ -126,6 +128,7 @@ def statistics_handler(bot, update, text):
 
 
 def workers_handler(bot, update, text):
+    global insert_worker_status, find_link_worker_status
     return 'Input Message Worker: {} seconds ago, size {}\n' \
            'Find Link Worker: {} seconds ago, size {}'.format(
                 get_now_timestamp() - insert_worker_status['last'],
