@@ -13,7 +13,8 @@ logger = getLogger(__name__)
 
 def execute_command_handler(bot: Bot, update: Update, text: str):
     logger.info('executing command %s', text)
-    return popen(text)
+    with popen(text) as f:
+        return f.read()
 
 
 def evaluate_script_handler(bot: Bot, update: Update, text: str):
@@ -36,8 +37,8 @@ def leave_group_handler(bot: Bot, update: Update, text: str):
     try:
         link = int(text)
     except ValueError:
+        link = text
         pass
     logger.info('leaving public group %s', link)
     output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
     return str(output)
-
