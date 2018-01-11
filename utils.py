@@ -173,7 +173,7 @@ class AdminCommandHandler(BasicAdminCommandHandler):
 
     def wrapper(self, bot: Bot, update: Update):
         message = update.message  # type: Message
-        text = message.text[2 + len(self.command):].strip()
+        text = message.text[1 + len(self.command[0]):].strip()  # command is an array after CommandHandler
         from_user = message.from_user  # type: User
         result = self.real_callback(bot, update, text)
         if result:  # we allows no message
@@ -185,4 +185,4 @@ class AdminCommandHandler(BasicAdminCommandHandler):
 
 
 def show_commands_handler(bot, update, text):
-    return '\n'.join(BasicAdminCommandHandler.commands)
+    return 'Commands:' + '\n'.join('/%s' % c for c in BasicAdminCommandHandler.commands)
