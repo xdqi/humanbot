@@ -102,6 +102,7 @@ def main():
     dispatcher.add_handler(AdminCommandHandler('joinpub', admin.join_public_group_handler))
     dispatcher.add_handler(AdminCommandHandler('joinprv', admin.join_private_group_handler))
     dispatcher.add_handler(AdminCommandHandler('leave', admin.leave_group_handler))
+    dispatcher.add_handler(AdminCommandHandler('stats', humanbot.statistics_handler))
     dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
     dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
     dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))

@@ -11,7 +11,7 @@ from typing import List
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
 
-from telegram import Bot, Update
+from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel
@@ -173,14 +173,14 @@ class AdminCommandHandler(BasicAdminCommandHandler):
 
     def wrapper(self, bot: Bot, update: Update):
         message = update.message  # type: Message
-        text = message.text[1 + len(self.command):].strip()
+        text = message.text[2 + len(self.command):].strip()
         from_user = message.from_user  # type: User
         result = self.real_callback(bot, update, text)
         if result:  # we allows no message
             bot.send_message(chat_id=message.chat_id,
                              text=result,
                              parse_mode='HTML',
-                             reply_to_message_id=from_user.id
+                             reply_to_message_id=message.message_id
                              )
 
 
