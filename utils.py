@@ -6,10 +6,13 @@ from logging import getLogger
 from io import BytesIO
 from threading import current_thread
 from math import ceil
+from typing import List
 
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
 
+from telegram import Bot, Update
+from telegram.ext import CommandHandler, Filters
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel
 
@@ -145,5 +148,41 @@ def is_chinese_group(group: Channel):
     # for 100 messages, at least 10 should be chinese text
     return sum(is_chinese_message(m.message) > 0 for m in result.messages) > ceil(len(result.messages) / 10)
 
+
 def report_exception():
     raven_client.captureException()
+
+
+class BasicAdminCommandHandler(CommandHandler):
+    commands = []
+
+    def __init__(self, command: str, callback: callable):
+        super().__init__(command=command,
+                         callback=callback,
+                         filters=Filters.chat(chat_id=config.ADMIN_UIDS),
+                         )
+        BasicAdminCommandHandler.commands.append(command)
+
+
+class AdminCommandHandler(BasicAdminCommandHandler):
+    def __init__(self, command: str, callback: callable):
+        super().__init__(command=command,
+                         callback=self.wrapper,
+                         )
+        self.real_callback = callback
+
+    def wrapper(self, bot: Bot, update: Update):
+        message = update.message  # type: Message
+        text = message.text[1 + len(self.command):].strip()
+        from_user = message.from_user  # type: User
+        result = self.real_callback(bot, update, text)
+        if result:  # we allows no message
+            bot.send_message(chat_id=message.chat_id,
+                             text=result,
+                             parse_mode='HTML',
+                             reply_to_message_id=from_user.id
+                             )
+
+
+def show_commands_handler(bot, update, text):
+    return '\n'.join(BasicAdminCommandHandler.commands)

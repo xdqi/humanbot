@@ -12,10 +12,10 @@ from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update, Bot, Message, User, PhotoSize, Chat
 
 import config
-from utils import upload, ocr, report_exception
+from utils import upload, ocr, report_exception, AdminCommandHandler, show_commands_handler
 from models import update_user_real, update_group_real
-from humanbot import insert_message
-
+import admin
+import humanbot
 
 logger = getLogger(__name__)
 
@@ -37,7 +37,7 @@ def update_group(bot: Bot, chat_id: int):
 def message(bot: Bot, update: Update):
     msg = update.message  # type: Message
     user = msg.from_user  # type: User
-    insert_message(msg.chat_id, user.id, msg.text, msg.date)
+    humanbot.insert_message(msg.chat_id, user.id, msg.text, msg.date)
     update_user(user)
     update_group(bot, msg.chat_id)
 
@@ -65,7 +65,7 @@ def picture(bot: Bot, update: Update):
         logger.info('ocr result:\n%s', result)
         text = result + '\n' + caption
 
-    insert_message(msg.chat_id, user.id, text, msg.date)
+    humanbot.insert_message(msg.chat_id, user.id, text, msg.date)
     update_user(user)
     update_group(bot, msg.chat_id)
 
@@ -96,6 +96,15 @@ def main():
 
     # set up message handlers
     dispatcher = updater.dispatcher
+
+    dispatcher.add_handler(AdminCommandHandler('exec', admin.execute_command_handler))
+    dispatcher.add_handler(AdminCommandHandler('py', admin.evaluate_script_handler))
+    dispatcher.add_handler(AdminCommandHandler('joinpub', admin.join_public_group_handler))
+    dispatcher.add_handler(AdminCommandHandler('joinprv', admin.join_private_group_handler))
+    dispatcher.add_handler(AdminCommandHandler('leave', admin.leave_group_handler))
+    dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
+    dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
+    dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
 
     message_handler = MessageHandler(filters=Filters.text, callback=message)
     dispatcher.add_handler(message_handler)

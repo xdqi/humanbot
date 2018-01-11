@@ -1,5 +1,5 @@
 import traceback
-from os import popen, getpid
+from os import getpid
 from threading import current_thread, Thread
 from datetime import datetime, timezone
 from io import BytesIO
@@ -21,8 +21,8 @@ from telethon.tl.types import \
     MessageActionChatEditTitle, \
     PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
     ChatInvite
-from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
-from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import CheckChatInviteRequest
 from telethon.utils import get_peer_id, resolve_id
 
 from senders import client
@@ -111,6 +111,28 @@ def message_insert_worker():
 
     session.close()
     Session.remove()
+
+
+def threads_handler(bot, update, text):
+    return str(thread_called_count)
+
+
+def statistics_handler(bot, update, text):
+    return 'Uptime: {}s\nProcessed: {}\nAverage: {}s'.format(
+                (datetime.now() - start_time).total_seconds(),
+                received_message,
+                total_used_time / received_message
+            )
+
+
+def workers_handler(bot, update, text):
+    return 'Input Message Worker: {} seconds ago, size {}\n' \
+           'Find Link Worker: {} seconds ago, size {}'.format(
+                get_now_timestamp() - insert_worker_status['last'],
+                insert_worker_status['size'],
+                get_now_timestamp() - find_link_worker_status['last'],
+                find_link_worker_status['size']
+            )
 
 
 def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
@@ -281,58 +303,6 @@ def update_message_from_chat(update: UpdateShortChatMessage):
 def update_message_from_user(update: UpdateShortMessage):
     insert_message_local_timezone(update.user_id, update.user_id, update.message, update.date)
     update_user(update.user_id)
-    if update.user_id in config.ADMIN_UIDS:
-        output = ''
-        if update.message.startswith('/exec'):
-            command = update.message[5:].strip()
-            logger.info('executing command %s', command)
-            with popen(command, 'r') as f:
-                output = f.read()
-        elif update.message.startswith('/py'):
-            script = update.message[3:].strip()
-            logger.info('evaluating script %s', script)
-            output = repr(eval(script))
-        elif update.message.startswith('/joinpub'):
-            link = update.message[8:].strip()
-            logger.info('joining public group %s', link)
-            output = client.invoke(JoinChannelRequest(client.get_entity(link)))
-        elif update.message.startswith('/leave'):
-            link = update.message[9:].strip()
-            try:
-                link = int(link)
-            except ValueError:
-                pass
-            logger.info('leaving public group %s', link)
-            output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
-        elif update.message.startswith('/joinprv'):
-            link = update.message[8:].strip()
-            logger.info('joining private group %s', link)
-            output = client.invoke(ImportChatInviteRequest(link))
-        elif update.message.startswith('/threads'):
-            output = thread_called_count
-        elif update.message.startswith('/stat'):
-            output = 'Uptime: {}s\nProcessed: {}\nAverage: {}s'.format(
-                (datetime.now() - start_time).total_seconds(),
-                received_message,
-                total_used_time / received_message
-            )
-        elif update.message.startswith('/workers'):
-            output = 'Input Message Worker: {} seconds ago, size {}\n' \
-                     'Find Link Worker: {} seconds ago, size {}'.format(
-                get_now_timestamp() - insert_worker_status['last'],
-                insert_worker_status['size'],
-                get_now_timestamp() - find_link_worker_status['last'],
-                find_link_worker_status['size']
-            )
-        if output:
-            output = '```{}```'.format(output)
-            logger.info('sending message %s', output)
-            client.send_message(entity=update.user_id,
-                                message=output,
-                                reply_to=update.id,
-                                parse_mode='markdown',
-                                link_preview=False
-                                )
 
 
 def update_handler(update):
