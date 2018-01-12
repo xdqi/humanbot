@@ -74,11 +74,11 @@ def find_link_to_join(session, msg: str):
 
     for link in private_links:
         invite_hash = link[-22:]
+        if invite_hash in recent_found_links:
+            continue
         group = client.invoke(CheckChatInviteRequest(invite_hash))
+        recent_found_links[invite_hash] = True
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
-            if invite_hash in recent_found_links:
-                continue
-            recent_found_links[invite_hash] = True
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join group with /joinprv {}'.format(
                     link,
