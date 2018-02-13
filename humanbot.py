@@ -39,10 +39,10 @@ PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 recent_found_links = ExpiringDict(max_len=1000, max_age_seconds=3600)
 def find_link_to_join(session, msg: str):
-    public_links = PUBLIC_REGEX.findall(msg)
-    private_links = INVITE_REGEX.findall(msg)
+    public_links = set(PUBLIC_REGEX.findall(msg))
+    private_links = set(INVITE_REGEX.findall(msg))
 
-    if public_links + private_links:
+    if public_links or private_links:
         logger.info('found links. public: %s, private: %s', public_links, private_links)
 
     for link in public_links:
