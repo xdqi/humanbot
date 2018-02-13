@@ -45,21 +45,6 @@ class KosakaFTP(FTP):
                 self.cwd(directory)
 
 
-def remove_ocr_spaces(msg: str):
-    parts = msg.split(' ')
-    result = ''
-    for i in range(len(parts) - 1):
-        result += parts[i]
-
-        prev = parts[i][-1]
-        after = parts[i + 1][0]
-        if ord(prev) < 1328 and ord(after) < 1328:  # detect latin/cyrillic character only
-            result += ' '
-
-    result += parts[-1]
-    return result
-
-
 class FakeResponse():
     def json(self):
         return {}
@@ -96,7 +81,7 @@ def ocr(fullpath: str):
     ocr_result = req.json()  # type: dict
     if 'body' in ocr_result.keys():
         result += '\n'
-        result += remove_ocr_spaces(ocr_result['body'])
+        result += ocr_result['body']
     logger.info('pic ocred\n%s', result)
 
     return result
