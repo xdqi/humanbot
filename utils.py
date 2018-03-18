@@ -7,6 +7,7 @@ from io import BytesIO
 from threading import current_thread
 from math import ceil
 from typing import List
+from os import makedirs
 
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
@@ -21,28 +22,6 @@ from senders import bot, client
 
 logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN)
-
-
-class KosakaFTP(FTP):
-    def __init__(self, *args, **kwargs):
-        super().__init__(timeout=5, *args, **kwargs)
-
-    def cdp(self, directory):
-        if directory != "":
-            try:
-                self.cwd(directory)
-                logger.info('cd to %s', directory)
-            except FTPError:  # 550 No such file or directory
-                new_dir = "/".join(directory.split("/")[:-1])
-                logger.debug('go up to %s', new_dir)
-                self.cdp(new_dir)
-                logger.debug('mkdir %s', directory)
-                try:
-                    self.mkd(directory)
-                except FTPError:  # 550 File exists
-                    pass
-                logger.debug('cd %s', directory)
-                self.cwd(directory)
 
 
 class FakeResponse():
@@ -60,18 +39,23 @@ def wget_retry(url, remaining_retry=1):
         return wget_retry(url, remaining_retry - 1)
 
 
-def upload(buffer, path, filename) -> str:
-    fullpath = '{}/{}'.format(path, filename)
-    # upload to ftp server
-    ftp = KosakaFTP()
-    ftp.connect(**config.FTP_SERVER)
-    ftp.login(**config.FTP_CREDENTIAL)
-    ftp.cdp(path)
-    ftp.storbinary('STOR {}'.format(filename), buffer)
-    buffer.close()
-    ftp.close()
-    logger.info('File uploaded to %s', fullpath)
-    return fullpath
+def upload_generic(buffer, root, path, filename) -> str:
+    url_path = '{}/{}'.format(path, filename)
+    # copy to local network drive
+    makedirs('{}{}'.format(root, path), exist_ok=True)
+    with open('{}{}'.format(root, url_path), 'wb') as f:
+        f.write(buffer.read())
+        buffer.close()
+    logger.info('File uploaded to %s', url_path)
+    return url_path
+
+
+def upload_pic(buffer, path, filename) -> str:
+    return upload_generic(buffer, config.PIC_PATH, path, filename)
+
+
+def upload_log(buffer, path, filename) -> str:
+    return upload_generic(buffer, config.LOG_PATH, path, filename)
 
 
 def ocr(fullpath: str):
@@ -96,17 +80,18 @@ def send_message_to_administrators(msg: str):
     if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
         buffer = BytesIO(msg.encode('utf-8'))
         now = datetime.now()
-        date = now.strftime('%y%m%d')
+        date = now.strftime('%y/%m')
         timestamp = now.timestamp()
-        path = '/log/{}'.format(date)
+        path = '/{}'.format(date)
         thread_name = current_thread().name
         filename = '{}-{}.txt'.format(thread_name, timestamp)
         exception = msg.splitlines()[-1]
-        upload(buffer, path, filename)
-        msg = 'Long message: ... {}\nURL: http://fra2.dom.ain.kwsv.win{}/{}'.format(
+        url_path = upload_log(buffer, path, filename)
+
+        msg = 'Long message: ... {}\nURL: {}{}'.format(
             exception,
-            path,
-            filename
+            config.LOG_URL,
+            url_path
         )
     bot.send_message(chat_id=config.ADMIN_CHANNEL,
                      text='```{}```'.format(msg.strip()),

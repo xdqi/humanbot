@@ -29,7 +29,7 @@ from senders import client
 import models
 import config
 from models import update_user_real, update_group_real, Session
-from utils import upload, ocr, get_now_timestamp, send_message_to_administrators, is_chinese_group, \
+from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, is_chinese_group, \
     report_exception
 import realbot
 
@@ -37,7 +37,7 @@ logger = getLogger(__name__)
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
-recent_found_links = ExpiringDict(max_len=1000, max_age_seconds=3600)
+recent_found_links = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def find_link_to_join(session, msg: str):
     public_links = set(PUBLIC_REGEX.findall(msg))
     private_links = set(INVITE_REGEX.findall(msg))
@@ -76,6 +76,8 @@ def find_link_to_join(session, msg: str):
         invite_hash = link[-22:]
         if invite_hash in recent_found_links:
             continue
+        else:
+            print(recent_found_links)
         group = client.invoke(CheckChatInviteRequest(invite_hash))
         recent_found_links[invite_hash] = True
         if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
@@ -260,8 +262,12 @@ def download_file(media: MessageMediaPhoto):
     # calculate path
     original = media.photo.sizes[-1]  # type: PhotoSize
     location = original.location  # type: FileLocation
-    path = '/{}/{}'.format(location.dc_id, location.volume_id)
-    filename = '{}.jpg'.format(location.local_id)
+    now = datetime.now()
+    path = '/{}/{}'.format(now.year, now.month)
+    filename = '{}-{}_{}_{}.jpg'.format(get_now_timestamp(),
+                                        location.dc_id,
+                                        location.volume_id,
+                                        location.local_id)
 
     return buffer, path, filename
 
@@ -273,7 +279,7 @@ def download_upload_ocr(media: MessageMediaPhoto):
         report_exception()
         return 'tgpic://download-failed'
 
-    fullpath = upload(buffer, path, filename)
+    fullpath = upload_pic(buffer, path, filename)
     return ocr(fullpath)
 
 

@@ -12,7 +12,7 @@ from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update, Bot, Message, User, PhotoSize, Chat
 
 import config
-from utils import upload, ocr, report_exception, AdminCommandHandler, show_commands_handler
+from utils import upload_pic, ocr, report_exception, AdminCommandHandler, show_commands_handler
 from models import update_user_real, update_group_real
 import admin
 import humanbot
@@ -57,10 +57,10 @@ def picture(bot: Bot, update: Update):
         buffer.seek(0)
 
         now = datetime.now()
-        path = '/bot/{}'.format(now.strftime('%y%m%d'))
-        filename = '{}.jpg'.format(file.file_id)
+        path = '/{}/{}'.format(now.year, now.month)
+        filename = '{}-{}.jpg'.format(int(now.timestamp()), file.file_id)
 
-        fullpath = upload(buffer, path, filename)
+        fullpath = upload_pic(buffer, path, filename)
         result = ocr(fullpath)
         logger.info('ocr result:\n%s', result)
         text = result + '\n' + caption
