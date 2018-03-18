@@ -285,7 +285,7 @@ def update_message(update: Message):
     if update.message:
         insert_message_local_timezone(chat, update.from_id, update.message, update.date)
     elif isinstance(update.media, (MessageMediaDocument, MessageMediaPhoto)):
-        text = update.media.caption or ''  # in case it is `None`
+        text = update.message or ''  # in case it is `None`
         if isinstance(update.media, MessageMediaPhoto):
             result = download_upload_ocr(update.media)
             text = result + '\n' + text
