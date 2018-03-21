@@ -1,7 +1,6 @@
 import re
 import traceback
 from datetime import datetime
-from ftplib import FTP, Error as FTPError
 from logging import getLogger
 from io import BytesIO
 from threading import current_thread
@@ -99,7 +98,7 @@ def send_message_to_administrators(msg: str):
                      disable_web_page_preview=False)
 
 
-CHINESE_REGEX = re.compile(r"\u4e00-\u9fff")
+CHINESE_REGEX = re.compile(r"[\u4e00-\u9fff]")
 def is_chinese_message(message: str):
     return bool(CHINESE_REGEX.findall(message))
 
@@ -116,7 +115,17 @@ def is_chinese_group(group: Channel):
         hash=0,
     ))
     # for 100 messages, at least 10 should be chinese text
-    return sum(is_chinese_message(m.message) > 0 for m in result.messages) > ceil(len(result.messages) / 10)
+    chinese_count = sum(is_chinese_message(m.message) > 0 for m in result.messages)
+    all_count = len(result.messages)
+
+    send_message_to_administrators(
+        f'''Quick Message Analysis for Group {group.title} (@{group.username})
+Message Count: {all_count}, Chinese detected: {chinese_count}
+Messages: {[m.message for m in result.messages]}
+@{group.username} Result: {chinese_count}/{all_count}
+'''
+    )
+    return chinese_count > ceil(all_count / 10)
 
 
 def report_exception():
