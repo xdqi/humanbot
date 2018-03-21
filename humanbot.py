@@ -52,7 +52,7 @@ def find_link_to_join(session, msg: str):
             continue
         recent_found_links[link] = True
         group = client.get_entity(link)
-        if isinstance(group, Chat) or (isinstance(group, Channel) and not group.broadcast):
+        if isinstance(group, Chat) or isinstance(group, Channel):
             gid = peer_to_internal_id(group)
             group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
             if not group_exist:
@@ -62,14 +62,11 @@ def find_link_to_join(session, msg: str):
                 if not is_chinese_group(group):  # we do it after logging it to our system
                     continue
                 result = client.invoke(JoinChannelRequest(group))
-                send_message_to_administrators('joined public group {}: {} having {} members,'
-                                               ' date {}.'.format(
-                        link,
-                        group.title,
-                        group.participants_count,
-                        group.date,
-                    )
-                )
+                group_type = 'channel' if group.broadcast else 'group'
+                send_message_to_administrators(f'joined public {group_type}: {group.title}({link})\n'
+                                               f'members: {group.participants_count}'
+                                               f'creation date {group.date}'
+                                               )
                 group_last_changed[gid] = True
 
     for link in private_links:
