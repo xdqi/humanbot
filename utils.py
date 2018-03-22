@@ -93,7 +93,7 @@ def send_message_to_administrators(msg: str):
             url_path
         )
     bot.send_message(chat_id=config.ADMIN_CHANNEL,
-                     text='```{}```'.format(msg.strip()),
+                     text=msg.strip(),
                      parse_mode='markdown',
                      disable_web_page_preview=False)
 
