@@ -49,12 +49,14 @@ def find_link_to_join(session, msg: str):
         if link in config.GROUP_BLACKLIST:  # false detection of private link
             continue
         if link in recent_found_links:
+            logger.warning(f'Group @{link} is in recent found links, skip')
             continue
         recent_found_links[link] = True
         group = client.get_entity(link)
         if isinstance(group, Chat) or isinstance(group, Channel):
             gid = peer_to_internal_id(group)
             group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+            logger.warning(f'Group @{link} is already in our database, skip')
             if not group_exist:
                 link = group.username if hasattr(group, 'username') else None
                 new_group = models.Group(gid=gid, name=group.title, link=link)
@@ -63,8 +65,8 @@ def find_link_to_join(session, msg: str):
                     continue
                 result = client.invoke(JoinChannelRequest(group))
                 group_type = 'channel' if group.broadcast else 'group'
-                send_message_to_administrators(f'joined public {group_type}: {group.title}({link})\n'
-                                               f'members: {group.participants_count}'
+                send_message_to_administrators(f'joined public {group_type}: {group.title}(@{link})\n'
+                                               f'members: {group.participants_count}\n'
                                                f'creation date {group.date}'
                                                )
                 group_last_changed[gid] = True
