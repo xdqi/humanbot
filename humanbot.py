@@ -36,10 +36,11 @@ import realbot
 logger = getLogger(__name__)
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
+PUBLIC_AT_REGEX = re.compile(r"@([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
 recent_found_links = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def find_link_to_join(session, msg: str):
-    public_links = set(PUBLIC_REGEX.findall(msg))
+    public_links = set(PUBLIC_REGEX.findall(msg)).union(PUBLIC_AT_REGEX.findall(msg))
     private_links = set(INVITE_REGEX.findall(msg))
 
     if public_links or private_links:
@@ -79,7 +80,7 @@ def find_link_to_join(session, msg: str):
             print(recent_found_links)
         group = client.invoke(CheckChatInviteRequest(invite_hash))
         recent_found_links[invite_hash] = True
-        if isinstance(group, ChatInvite) and group.participants_count > 1 and not group.broadcast:
+        if isinstance(group, ChatInvite) and group.participants_count > 1:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join group with /joinprv {}'.format(
                     link,
