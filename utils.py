@@ -196,8 +196,6 @@ def test_and_join_public_channel(session, link) -> (int, bool):
             if count < config.GROUP_MEMBER_JOIN_LIMIT:
                 logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
                 return gid, False
-            new_group = models.Group(gid=gid, name=info.title, link=link)
-            session.add(new_group)
 
             group = client.get_input_entity(link)  # type: InputChannel
             if is_chinese_message(info.title) or \
@@ -208,7 +206,15 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                                                f'members: {count}\n'
                                                f'creation date {info.date}'
                                                )
-            joined = True
+                joined = True
+
+            try:
+                new_group = models.Group(gid=gid, name=info.title, link=link)
+                session.add(new_group)
+                session.commit()
+            except:
+                report_exception()
+                session.rollback()
 
     return gid, joined
 

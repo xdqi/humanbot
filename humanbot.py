@@ -29,7 +29,7 @@ import models
 import config
 from models import update_user_real, update_group_real, Session
 from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
-    peer_to_internal_id, test_and_join_public_channel_by_humanbot
+    peer_to_internal_id, test_and_join_public_channel
 import realbot
 
 logger = getLogger(__name__)
@@ -52,7 +52,7 @@ def find_link_to_join(session, msg: str):
             logger.warning(f'Group @{link} is in recent found links, skip')
             continue
         recent_found_links[link] = True
-        gid, joined = test_and_join_public_channel_by_humanbot(session, link)
+        gid, joined = test_and_join_public_channel(session, link)
         if joined:
             group_last_changed[gid] = True
 
