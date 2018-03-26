@@ -21,16 +21,15 @@ from telethon.tl.types import \
     MessageActionChatEditTitle, \
     PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
     ChatInvite
-from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import CheckChatInviteRequest
-from telethon.utils import get_peer_id, resolve_id
+from telethon.utils import resolve_id
 
 from senders import client
 import models
 import config
 from models import update_user_real, update_group_real, Session
-from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, is_chinese_group, \
-    report_exception
+from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
+    peer_to_internal_id, test_and_join_public_channel_by_humanbot
 import realbot
 
 logger = getLogger(__name__)
@@ -53,24 +52,9 @@ def find_link_to_join(session, msg: str):
             logger.warning(f'Group @{link} is in recent found links, skip')
             continue
         recent_found_links[link] = True
-        group = client.get_entity(link)
-        if isinstance(group, Chat) or isinstance(group, Channel):
-            gid = peer_to_internal_id(group)
-            group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
-            logger.warning(f'Group @{link} is already in our database, skip')
-            if not group_exist:
-                link = group.username if hasattr(group, 'username') else None
-                new_group = models.Group(gid=gid, name=group.title, link=link)
-                session.add(new_group)
-                if not is_chinese_group(group):  # we do it after logging it to our system
-                    continue
-                result = client.invoke(JoinChannelRequest(group))
-                group_type = 'channel' if group.broadcast else 'group'
-                send_message_to_administrators(f'joined public {group_type}: {group.title}(@{link})\n'
-                                               f'members: {group.participants_count}\n'
-                                               f'creation date {group.date}'
-                                               )
-                group_last_changed[gid] = True
+        gid, joined = test_and_join_public_channel_by_humanbot(session, link)
+        if joined:
+            group_last_changed[gid] = True
 
     for link in private_links:
         invite_hash = link[-22:]
@@ -177,16 +161,6 @@ def auto_add_chat_worker():
 def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
     utc_date = date.replace(tzinfo=timezone.utc)
     insert_message(chat_id, user_id, msg, utc_date)
-
-
-def peer_to_internal_id(peer):
-    """
-    Get bot marked ID
-
-    :param peer:
-    :return:
-    """
-    return get_peer_id(peer)
 
 
 user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)

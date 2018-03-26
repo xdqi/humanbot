@@ -14,6 +14,7 @@ BOT_WEBHOOK_PATH = 'tg-Webhook-xxxx'
 BOT_WEBHOOK_URL = 'https://webhook-url/' + BOT_WEBHOOK_PATH
 
 GROUP_BLACKLIST = ['joinchat', 'socks']
+GROUP_MEMBER_JOIN_LIMIT = 20
 
 FTP_NAME = 'example-xxx'
 PIC_PATH = 'pic-path'

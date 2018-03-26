@@ -13,10 +13,13 @@ from raven import Client as RavenClient
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
+from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
-from telethon.tl.types import Channel
+from telethon.tl.types import Channel, Chat, InputChannel
+from telethon.utils import get_peer_id
 
 import config
+import models
 from senders import bot, client
 
 logger = getLogger(__name__)
@@ -74,6 +77,13 @@ def get_now_timestamp() -> int:
     return int(datetime.now().timestamp())
 
 
+def tg_html_entity(s: str) -> str:
+    s = s.replace('&', '&amp;')
+    s = s.replace('<', '&lt;')
+    s = s.replace('>', '&gt;')
+    return s
+
+
 def send_message_to_administrators(msg: str):
     logger.info('Sending to administrators: \n%s', msg)
     if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
@@ -94,7 +104,7 @@ def send_message_to_administrators(msg: str):
         )
     bot.send_message(chat_id=config.ADMIN_CHANNEL,
                      text=msg.strip(),
-                     parse_mode='markdown',
+                     parse_mode='HTML',
                      disable_web_page_preview=False)
 
 
@@ -103,7 +113,7 @@ def is_chinese_message(message: str):
     return bool(CHINESE_REGEX.findall(message))
 
 
-def is_chinese_group(group: Channel):
+def is_chinese_group(group):
     result = client.invoke(GetHistoryRequest(
         peer=group,
         offset_id=0,
@@ -165,3 +175,49 @@ class AdminCommandHandler(BasicAdminCommandHandler):
 
 def show_commands_handler(bot, update, text):
     return 'Commands:' + '\n'.join('/%s' % c for c in BasicAdminCommandHandler.commands)
+
+
+def test_and_join_public_channel(session, link) -> (int, bool):
+    """
+    :param session: SQLAlchemy session
+    :param link: public link (like im91yun)
+    :return: bool: if joined the group/channel
+    """
+    info = bot.get_chat('@' + link)
+    gid = None
+    joined = False
+    if info.type in ['supergroup', 'channel']:
+        gid = info.id
+        group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+        logger.warning(f'Group @{link} is already in our database, skip')
+        if not group_exist:
+            link = info.username if hasattr(info, 'username') else None
+            count = bot.get_chat_members_count('@' + link)
+            if count < config.GROUP_MEMBER_JOIN_LIMIT:
+                logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
+                return gid, False
+            new_group = models.Group(gid=gid, name=info.title, link=link)
+            session.add(new_group)
+
+            group = client.get_input_entity(link)  # type: InputChannel
+            if is_chinese_message(info.title) or \
+               is_chinese_message(info.description) or \
+               is_chinese_group(group):  # we do it after logging it to our system
+                client.invoke(JoinChannelRequest(group))
+                send_message_to_administrators(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
+                                               f'members: {count}\n'
+                                               f'creation date {info.date}'
+                                               )
+            joined = True
+
+    return gid, joined
+
+
+def peer_to_internal_id(peer):
+    """
+    Get bot marked ID
+
+    :param peer:
+    :return:
+    """
+    return get_peer_id(peer)
