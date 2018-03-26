@@ -334,7 +334,7 @@ def update_handler_wrapper(update):
             exc = e.args[0]
             send_to_admin = False
         elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
-            exc = e.args
+            exc = repr(e.args)
 
         logger.error(info + exc)
         if send_to_admin:  # exception that should be send to administrator
