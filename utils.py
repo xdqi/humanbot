@@ -5,6 +5,7 @@ from logging import getLogger
 from io import BytesIO
 from threading import current_thread
 from math import ceil
+from time import sleep
 from os import makedirs
 
 from requests import get, ReadTimeout
@@ -186,6 +187,7 @@ def test_and_join_public_channel(session, link) -> (int, bool):
     gid = None
     joined = False
     try:
+        sleep(0.1)
         info = bot.get_chat('@' + link)
     except BadRequest:
         return None, False
