@@ -66,10 +66,11 @@ def find_link_to_join(session, msg: str):
         recent_found_links[invite_hash] = True
         if isinstance(group, ChatInvite) and group.participants_count > 1:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
-                                           'Join group with /joinprv {}'.format(
+                                           'Join {} with /joinprv {}'.format(
                     link,
                     group.title,
                     group.participants_count,
+                    'channel' if group.broadcast else 'group',
                     link[-22:]
                 )
             )
