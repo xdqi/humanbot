@@ -19,7 +19,7 @@ class RedisExpiringSet(RedisObject):
     def __repr__(self):
         min_timestamp = utils.get_now_timestamp() - self.expire
         items = self.r.zrangebyscore(self.name, min_timestamp, float('+inf'))
-        return 'RedisExpiringSet{%s}' % items
+        return 'RedisExpiringSet%s' % (i.decode('utf-8') for i in items)
 
     def __contains__(self, item: str) -> bool:
         saved = self.r.zscore(self.name, item)
@@ -50,7 +50,7 @@ class RedisQueue(RedisObject):
 
     def __repr__(self):
         items = self.r.lrange(self.name, 0, -1)
-        return 'RedisQueue[%s]' % items
+        return 'RedisQueue%s' % (i.decode('utf-8') for i in items)
 
     def qsize(self) -> int:
         return self.r.llen(self.name)
@@ -75,9 +75,9 @@ class RedisDict(RedisObject):
 
     def __repr__(self):
         items = self.r.hgetall(self.name)
-        return 'RedisDict{%s}' % items
+        return 'RedisDict%s' % items
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> str:
         return self.r.hget(self.name, key).decode('utf-8')
 
     def __setitem__(self, key: str, value: str):
