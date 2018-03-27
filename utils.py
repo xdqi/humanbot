@@ -204,10 +204,9 @@ def test_and_join_public_channel(session, link) -> (int, bool):
             if is_chinese_message(info.title) or \
                is_chinese_message(info.description) or \
                is_chinese_group(group):  # we do it after logging it to our system
-                client.invoke(JoinChannelRequest(group))
+                result = client.invoke(JoinChannelRequest(group))
                 send_message_to_administrators(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
                                                f'members: {count}\n'
-                                               f'creation date {info.date}'
                                                )
                 joined = True
 
