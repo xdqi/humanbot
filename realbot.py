@@ -6,13 +6,12 @@ from io import BytesIO
 from datetime import datetime
 from logging import getLogger, INFO, DEBUG
 
-from expiringdict import ExpiringDict
-
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update, Bot, Message, User, PhotoSize, Chat
 
 import config
 from utils import upload_pic, ocr, report_exception, AdminCommandHandler, show_commands_handler
+import cache
 from models import update_user_real, update_group_real
 import admin
 import humanbot
@@ -24,12 +23,12 @@ def update_user(user: User):
     update_user_real(user.id, user.first_name, user.last_name, user.username, user.language_code)
 
 
-group_last_changed = ExpiringDict(max_len=100, max_age_seconds=300)
+bot_group_last_changed = cache.RedisExpiringSet('bot_group_last_changed', expire=300)
 def update_group(bot: Bot, chat_id: int):
-    if chat_id in group_last_changed.keys():
+    if str(chat_id) in bot_group_last_changed:
         return
     chat = bot.get_chat(chat_id)
-    group_last_changed[chat_id] = True
+    bot_group_last_changed.add(str(chat_id))
     if chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
         update_group_real(chat.id, chat.title, chat.username)
 
