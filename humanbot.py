@@ -117,12 +117,14 @@ def statistics_handler(bot, update, text):
 
 def workers_handler(bot, update, text):
     global insert_worker_status, find_link_worker_status
+    insert_last = int(insert_worker_status['last'])
+    insert_size = int(insert_worker_status['size'])
+    find_link_last = int(find_link_worker_status['last'])
+    find_link_size = int(find_link_worker_status['size'])
     return 'Input Message Worker: {} seconds ago, size {}\n' \
            'Find Link Worker: {} seconds ago, size {}'.format(
-                get_now_timestamp() - insert_worker_status['last'],
-                insert_worker_status['size'],
-                get_now_timestamp() - find_link_worker_status['last'],
-                find_link_worker_status['size']
+                get_now_timestamp() - insert_last, insert_size,
+                get_now_timestamp() - find_link_last, find_link_size
             )
 
 
