@@ -78,7 +78,19 @@ class RedisDict(RedisObject):
         return 'RedisDict%s' % items
 
     def __getitem__(self, key: str) -> str:
-        return self.r.hget(self.name, key).decode('utf-8')
+        val = self.r.hget(self.name, key)
+        if val is None:
+            return
+        return val.decode('utf-8')
 
     def __setitem__(self, key: str, value: str):
         self.r.hset(self.name, key, value)
+
+    def get(self, key: str, default: str):
+        val = self[key]
+        if val is None:
+            val = default
+        return val
+
+    def incrby(self, key: str, val: int):
+        self.r.hincrby(self.name, key, val)

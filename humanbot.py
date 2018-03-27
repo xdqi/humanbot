@@ -107,11 +107,11 @@ def threads_handler(bot, update, text):
 
 
 def statistics_handler(bot, update, text):
-    global start_time, received_message, total_used_time
+    global start_time, global_count
     return 'Uptime: {}s\nProcessed: {}\nAverage: {}s'.format(
-                (datetime.now() - start_time).total_seconds(),
-                received_message,
-                total_used_time / received_message
+                get_now_timestamp() - int(global_count['start_time']),
+                global_count['received_message'],
+                float(global_count['total_used_time']) / float(global_count['received_message'])
             )
 
 
@@ -319,12 +319,13 @@ def update_handler(update):
         pass
 
 
-thread_called_count = {}
-received_message = 0
-total_used_time = 0
-start_time = datetime.now()
+thread_called_count = cache.RedisDict('thread_called_count')
+global_count = cache.RedisDict('global_count')
+global_count['received_message'] = 0
+global_count['total_used_time'] = 0
+global_count['start_time'] = get_now_timestamp()
 def update_handler_wrapper(update):
-    prev_num = thread_called_count.get(current_thread().name, 0)
+    prev_num = int(thread_called_count.get(current_thread().name, 0))
     thread_called_count[current_thread().name] = prev_num + 1
     process_start_time = datetime.now()
     try:
@@ -348,9 +349,8 @@ def update_handler_wrapper(update):
 
     process_end_time = datetime.now()
     process_time = process_end_time - process_start_time
-    global received_message, total_used_time
-    received_message += 1
-    total_used_time += process_time.total_seconds()
+    global_count.incrby('received_message', 1)
+    global_count.incrby('total_used_time', int(process_time.total_seconds()))
 
 
 def main():
