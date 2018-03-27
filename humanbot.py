@@ -5,13 +5,11 @@ from datetime import datetime, timezone
 from io import BytesIO
 import re
 from time import sleep
-from queue import Queue
 from logging import getLogger, INFO, WARNING, basicConfig
 from pdb import Pdb
 from random import random
 from signal import signal, SIGUSR1
-
-from expiringdict import ExpiringDict
+from ast import literal_eval
 
 from telethon.errors import SessionPasswordNeededError
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError
@@ -26,6 +24,7 @@ from telethon.utils import resolve_id
 
 from senders import client
 import models
+import cache
 import config
 from models import update_user_real, update_group_real, Session
 from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
@@ -37,7 +36,7 @@ logger = getLogger(__name__)
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 PUBLIC_AT_REGEX = re.compile(r"@([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
 INVITE_REGEX = re.compile(r'(t(?:elegram)?\.me/joinchat/[a-zA-Z0-9_-]{22})')
-recent_found_links = ExpiringDict(max_len=10000, max_age_seconds=3600)
+recent_found_links = cache.RedisExpiringSet('recent_found_links', expire=3600)
 def find_link_to_join(session, msg: str):
     public_links = set(PUBLIC_REGEX.findall(msg)).union(PUBLIC_AT_REGEX.findall(msg))
     private_links = set(INVITE_REGEX.findall(msg))
@@ -51,10 +50,10 @@ def find_link_to_join(session, msg: str):
         if link in recent_found_links:
             logger.warning(f'Group @{link} is in recent found links, skip')
             continue
-        recent_found_links[link] = True
+        recent_found_links.add(link)
         gid, joined = test_and_join_public_channel(session, link)
         if joined:
-            group_last_changed[gid] = True
+            group_last_changed.add(str(gid))
 
     for link in private_links:
         invite_hash = link[-22:]
@@ -63,7 +62,7 @@ def find_link_to_join(session, msg: str):
         else:
             print(recent_found_links)
         group = client.invoke(CheckChatInviteRequest(invite_hash))
-        recent_found_links[invite_hash] = True
+        recent_found_links.add(invite_hash)
         if isinstance(group, ChatInvite) and group.participants_count > 1:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join {} with /joinprv {}'.format(
@@ -76,17 +75,19 @@ def find_link_to_join(session, msg: str):
             )
 
 
-insert_worker_status = {}
-insert_queue = Queue()
+insert_worker_status = cache.RedisDict('insert_worker_status')
+insert_queue = cache.RedisQueue('insert_queue')
 def message_insert_worker():
     session = Session()
 
     while True:
         try:
-            message = insert_queue.get()  # type: Chat
+            message = insert_queue.get()  # type: str
             if message is None:
-                break
-            session.add(message)
+                sleep(0.01)
+                continue
+            chat = models.Chat(**literal_eval(message))
+            session.add(chat)
             session.commit()
             insert_queue.task_done()
             insert_worker_status['last'] = get_now_timestamp()
@@ -130,14 +131,14 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
         return
     utc_timestamp = int(date.timestamp())
 
-    chat = models.Chat(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
+    chat = dict(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
 
-    insert_queue.put(chat)
+    insert_queue.put(repr(chat))
     find_link_queue.put(msg)
 
 
-find_link_worker_status = {}
-find_link_queue = Queue()
+find_link_worker_status = cache.RedisDict('find_link_worker_status')
+find_link_queue = cache.RedisQueue('find_link_queue')
 def auto_add_chat_worker():
     session = Session()
 
@@ -145,12 +146,14 @@ def auto_add_chat_worker():
         try:
             message = find_link_queue.get()  # type: str
             if message is None:
-                break
+                sleep(0.01)
+                continue
             find_link_to_join(session, message)
             find_link_queue.task_done()
             find_link_worker_status['last'] = get_now_timestamp()
             find_link_worker_status['size'] = find_link_queue.qsize()
         except:
+            traceback.print_exc()
             report_exception()
             session.rollback()
             find_link_queue.put(message)
@@ -164,7 +167,7 @@ def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
     insert_message(chat_id, user_id, msg, utc_date)
 
 
-user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
+user_last_changed = cache.RedisExpiringSet('user_last_changed', expire=3600)
 def update_user(user_id):
     if user_id is None or user_id in user_last_changed:  # user should be updated at a minute basis
         return
@@ -174,11 +177,11 @@ def update_user(user_id):
         logger.warning('Get user info failed: %s', user_id)
         report_exception()
         return
-    user_last_changed[user_id] = True
+    user_last_changed.add(user_id)
     update_user_real(user_id, user.first_name, user.last_name, user.username, user.lang_code)
 
 
-group_last_changed = ExpiringDict(max_len=1000, max_age_seconds=300)
+group_last_changed = cache.RedisExpiringSet('group_last_changed', expire=3600)
 def update_group(chat_id: int, title: str = None):
     """
     Try to update group information
@@ -187,12 +190,12 @@ def update_group(chat_id: int, title: str = None):
     :param title: New group title (optional)
     :return: None
     """
-    if chat_id in group_last_changed:  # user should be updated at a minute basis
+    if str(chat_id) in group_last_changed:  # user should be updated at a minute basis
         return
     id, type = resolve_id(chat_id)
     peer = type(id)
     group = client.get_entity(peer)
-    group_last_changed[chat_id] = True
+    group_last_changed.add(str(chat_id))
     if isinstance(group, (Chat, ChatFull)):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, None)
     elif isinstance(group, (Channel, ChannelFull)):

@@ -29,3 +29,4 @@ DB_CONFIG = {
     'sqlalchemy.url': 'sqlite:///output.db'
     # 'sqlalchemy.url': 'mysql://user:pass@db.example.com/db' # if you prefer MySQL
 }
+REDIS_URL = 'redis://localhost:6379/0'

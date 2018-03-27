@@ -5,7 +5,6 @@ from logging import getLogger
 from io import BytesIO
 from threading import current_thread
 from math import ceil
-from typing import List
 from os import makedirs
 
 from requests import get, ReadTimeout
