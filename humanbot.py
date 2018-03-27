@@ -118,9 +118,9 @@ def statistics_handler(bot, update, text):
 def workers_handler(bot, update, text):
     global insert_worker_status, find_link_worker_status
     insert_last = int(insert_worker_status['last'])
-    insert_size = int(insert_worker_status['size'])
+    insert_size = insert_queue.qsize()
     find_link_last = int(find_link_worker_status['last'])
-    find_link_size = int(find_link_worker_status['size'])
+    find_link_size = find_link_queue.qsize()
     return 'Input Message Worker: {} seconds ago, size {}\n' \
            'Find Link Worker: {} seconds ago, size {}'.format(
                 get_now_timestamp() - insert_last, insert_size,
