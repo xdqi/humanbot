@@ -250,7 +250,7 @@ def download_file(media: MessageMediaPhoto):
 def download_upload_ocr(media: MessageMediaPhoto):
     try:
         buffer, path, filename = download_file(media)
-    except (ValueError, RuntimeError, OSError):
+    except (ValueError, RuntimeError, OSError, AttributeError):
         report_exception()
         return 'tgpic://download-failed'
 
