@@ -12,6 +12,7 @@ from raven import Client as RavenClient
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
+from telegram.error import BadRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
@@ -182,9 +183,12 @@ def test_and_join_public_channel(session, link) -> (int, bool):
     :param link: public link (like im91yun)
     :return: bool: if joined the group/channel
     """
-    info = bot.get_chat('@' + link)
     gid = None
     joined = False
+    try:
+        info = bot.get_chat('@' + link)
+    except BadRequest:
+        return None, False
     if info.type in ['supergroup', 'channel']:
         gid = info.id
         group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
