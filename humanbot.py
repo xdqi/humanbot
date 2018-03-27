@@ -166,7 +166,7 @@ def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
 
 user_last_changed = ExpiringDict(max_len=10000, max_age_seconds=3600)
 def update_user(user_id):
-    if user_id in user_last_changed:  # user should be updated at a minute basis
+    if user_id is None or user_id in user_last_changed:  # user should be updated at a minute basis
         return
     try:
         user = client.get_entity(PeerUser(user_id))  # type: User
