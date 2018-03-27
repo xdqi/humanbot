@@ -227,8 +227,8 @@ def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
     :return:
     """
     name = update.title
-    if chat_id in group_last_changed:
-        del group_last_changed[chat_id]
+    if str(chat_id) in group_last_changed:
+        group_last_changed.discard(str(chat_id))
     update_group(chat_id, name)
 
 

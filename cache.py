@@ -36,6 +36,9 @@ class RedisExpiringSet(RedisObject):
     def add(self, item: str):
         self.r.zadd(self.name, utils.get_now_timestamp(), item)
 
+    def discard(self, item: str):
+        self.r.zrem(self.name, item)
+
     def clear(self):
         self.r.delete(self.name)
 
