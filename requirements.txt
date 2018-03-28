@@ -9,3 +9,5 @@ mysql-connector-python==8.0.5
 redis
 
 raven
+
+gevent

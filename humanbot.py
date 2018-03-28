@@ -1,3 +1,5 @@
+from gevent import monkey; monkey.patch_all(); del monkey
+
 import traceback
 from os import getpid
 from threading import current_thread, Thread
