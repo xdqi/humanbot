@@ -116,7 +116,7 @@ def is_chinese_message(message: str):
     return bool(CHINESE_REGEX.findall(message))
 
 
-def is_chinese_group(group):
+def is_chinese_group(group, info):
     result = client.invoke(GetHistoryRequest(
         peer=group,
         offset_id=0,
@@ -132,10 +132,10 @@ def is_chinese_group(group):
     all_count = len(result.messages)
 
     send_message_to_administrators(
-        f'''Quick Message Analysis for Group {group.title} (@{group.username})
+        f'''Quick Message Analysis for Group {info.title} (@{info.username})
 Message Count: {all_count}, Chinese detected: {chinese_count}
 Messages: {[m.message for m in result.messages]}
-@{group.username} Result: {chinese_count}/{all_count}
+@{info.username} Result: {chinese_count}/{all_count}
 '''
     )
     return chinese_count > ceil(all_count / 10)
@@ -223,7 +223,7 @@ def test_and_join_public_channel(session, link) -> (int, bool):
             group = client.get_input_entity(link)  # type: InputChannel
             if is_chinese_message(info.title) or \
                is_chinese_message(info.description) or \
-               is_chinese_group(group):  # we do it after logging it to our system
+               is_chinese_group(group, info):  # we do it after logging it to our system
                 result = client.invoke(JoinChannelRequest(group))
                 send_message_to_administrators(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
                                                f'members: {count}\n'
