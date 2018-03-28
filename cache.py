@@ -74,7 +74,7 @@ class RedisDict(RedisObject):
         self.name = name
 
     def __repr__(self):
-        return 'RedisDict%s' % self.r.hgetall(self.name)
+        return 'RedisDict%s' % {k.decode('utf-8'): v.decode('utf-8') for k, v in self.r.hgetall(self.name).items()}
 
     def __getitem__(self, key: str) -> str:
         val = self.r.hget(self.name, key)
@@ -95,4 +95,4 @@ class RedisDict(RedisObject):
         self.r.hincrby(self.name, key, val)
 
     def items(self):
-        return [(k.decode('utf-8'), v.decode('utf-8')) for k, v in self.r.hgetall(self.name).items()]
+        return ((k.decode('utf-8'), v.decode('utf-8')) for k, v in self.r.hgetall(self.name).items())
