@@ -7,19 +7,21 @@ from threading import current_thread
 from math import ceil
 from time import sleep
 from os import makedirs
+from random import sample
 
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
-from telegram.error import BadRequest
+from telegram.error import BadRequest, RetryAfter
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
 from telethon.utils import get_peer_id
 
 import config
+import cache
 import models
 from senders import bot, client
 
@@ -178,6 +180,17 @@ def show_commands_handler(bot, update, text):
     return 'Commands:' + '\n'.join('/%s' % c for c in BasicAdminCommandHandler.commands)
 
 
+bot_info = cache.RedisDict('bot_info')
+def get_available_bot() -> Bot:
+    all_bot = config.BOT_TOKENS
+    blacklist = set()
+    for k, v in bot_info.items():
+        if float(v) > get_now_timestamp():
+            blacklist.add(k)
+
+    return Bot(token=sample(all_bot - blacklist, 1)[0])
+
+
 def test_and_join_public_channel(session, link) -> (int, bool):
     """
     :param session: SQLAlchemy session
@@ -186,10 +199,15 @@ def test_and_join_public_channel(session, link) -> (int, bool):
     """
     gid = None
     joined = False
+    fetcher = get_available_bot()
     try:
         sleep(0.1)
-        info = bot.get_chat('@' + link)
-    except BadRequest:
+        info = fetcher.get_chat('@' + link)
+    except (BadRequest, RetryAfter) as e:
+        report_exception()
+        if isinstance(e, RetryAfter):
+            logger.warning('bot retry after %s seconds', e.retry_after)
+            bot_info[fetcher.token] = get_now_timestamp() + e.retry_after
         return None, False
     if info.type in ['supergroup', 'channel']:
         gid = info.id
@@ -197,7 +215,7 @@ def test_and_join_public_channel(session, link) -> (int, bool):
         logger.warning(f'Group @{link} is already in our database, skip')
         if not group_exist:
             link = info.username if hasattr(info, 'username') else None
-            count = bot.get_chat_members_count('@' + link)
+            count = fetcher.get_chat_members_count('@' + link)
             if count < config.GROUP_MEMBER_JOIN_LIMIT:
                 logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
                 return gid, False

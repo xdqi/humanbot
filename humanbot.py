@@ -163,6 +163,7 @@ def auto_add_chat_worker():
         except:
             traceback.print_exc()
             report_exception()
+            send_message_to_administrators(traceback.format_exc() + '\n- Find Link worker exception')
             session.rollback()
             find_link_queue.put(message)
             continue
