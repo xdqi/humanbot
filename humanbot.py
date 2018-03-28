@@ -14,7 +14,8 @@ from signal import signal, SIGUSR1
 from ast import literal_eval
 
 from telethon.errors import SessionPasswordNeededError
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError
+from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
+    InviteHashExpiredError, InviteHashInvalidError
 from telethon.tl.types import \
     UpdateNewChannelMessage, UpdateShortMessage, UpdateShortChatMessage, UpdateNewMessage, \
     UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
@@ -61,10 +62,12 @@ def find_link_to_join(session, msg: str):
         invite_hash = link[-22:]
         if invite_hash in recent_found_links:
             continue
-        else:
-            print(recent_found_links)
-        group = client.invoke(CheckChatInviteRequest(invite_hash))
         recent_found_links.add(invite_hash)
+        try:
+            group = client.invoke(CheckChatInviteRequest(invite_hash))
+        except (InviteHashExpiredError, InviteHashInvalidError) as e:
+            report_exception()
+            continue
         if isinstance(group, ChatInvite) and group.participants_count > 1:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join {} with /joinprv {}'.format(
