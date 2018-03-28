@@ -128,7 +128,7 @@ def is_chinese_group(group, info):
         hash=0,
     ))
     # for 100 messages, at least 10 should be chinese text
-    chinese_count = sum(is_chinese_message(m.message) > 0 for m in result.messages)
+    chinese_count = sum(is_chinese_message(m.message) > 0 if hasattr(m, 'message') else False for m in result.messages)
     all_count = len(result.messages)
 
     send_message_to_administrators(
