@@ -134,7 +134,7 @@ def is_chinese_group(group, info):
     send_message_to_administrators(
         f'''Quick Message Analysis for Group {info.title} (@{info.username})
 Message Count: {all_count}, Chinese detected: {chinese_count}
-Messages: {[m.message for m in result.messages]}
+Messages: {[m.message if hasattr(m, 'message') else '' for m in result.messages]}
 @{info.username} Result: {chinese_count}/{all_count}
 '''
     )
