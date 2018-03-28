@@ -140,6 +140,7 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
     insert_queue.put(repr(chat))
     if find_link_queue.qsize() > 50:
         send_message_to_administrators('Find link queue full, worker dead?')
+        Thread(target=auto_add_chat_worker).start()
     else:
         find_link_queue.put(msg)
 
