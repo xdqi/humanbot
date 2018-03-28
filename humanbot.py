@@ -136,7 +136,11 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
     chat = dict(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
 
     insert_queue.put(repr(chat))
-    find_link_queue.put(msg)
+    if find_link_queue.qsize() > 50:
+        send_message_to_administrators('Find link queue full, worker dead?')
+    else:
+        find_link_queue.put(msg)
+
 
 
 find_link_worker_status = cache.RedisDict('find_link_worker_status')
@@ -159,6 +163,7 @@ def auto_add_chat_worker():
             report_exception()
             session.rollback()
             find_link_queue.put(message)
+            continue
 
     session.close()
     Session.remove()
