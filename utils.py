@@ -221,8 +221,8 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                 return gid, False
 
             group = client.get_input_entity(link)  # type: InputChannel
-            if is_chinese_message(info.title) or \
-               is_chinese_message(info.description) or \
+            if (info.title and is_chinese_message(info.title)) or \
+               (info.description and is_chinese_message(info.description)) or \
                is_chinese_group(group, info):  # we do it after logging it to our system
                 result = client.invoke(JoinChannelRequest(group))
                 send_message_to_administrators(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
