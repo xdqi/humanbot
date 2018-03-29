@@ -14,7 +14,7 @@ from raven import Client as RavenClient
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
-from telegram.error import BadRequest, RetryAfter, TimedOut
+from telegram.error import TelegramError, BadRequest, RetryAfter, TimedOut
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
@@ -106,10 +106,13 @@ def send_message_to_administrators(msg: str):
             url_path,
             datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
-    bot.send_message(chat_id=config.ADMIN_CHANNEL,
-                     text=msg.strip(),
-                     parse_mode='HTML',
-                     disable_web_page_preview=False)
+    try:
+        bot.send_message(chat_id=config.ADMIN_CHANNEL,
+                         text=msg.strip(),
+                         parse_mode='HTML',
+                         disable_web_page_preview=False)
+    except TelegramError:
+        report_exception()
 
 
 CHINESE_REGEX = re.compile(r"[\u4e00-\u9fff]")
