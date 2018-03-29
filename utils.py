@@ -263,7 +263,7 @@ def need_to_be_online():
     if not global_count['online_time']:
         global_count['online_time'] = get_next_online_time()
         return False
-    if int(global_count['online_time']) - get_now_timestamp() > 600:
+    if int(global_count['online_time']) - get_now_timestamp() < 600:
         global_count['online_time'] = get_next_online_time()
         return True
     return False
