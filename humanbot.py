@@ -13,6 +13,8 @@ from random import random
 from signal import signal, SIGUSR1
 from ast import literal_eval
 
+from sqlalchemy.exc import OperationalError
+
 from telethon.errors import SessionPasswordNeededError
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
     InviteHashExpiredError, InviteHashInvalidError
@@ -164,11 +166,13 @@ def auto_add_chat_worker():
             find_link_queue.task_done()
             find_link_worker_status['last'] = get_now_timestamp()
             find_link_worker_status['size'] = find_link_queue.qsize()
-        except:
-            traceback.print_exc()
+        except BaseException as e:
             report_exception()
-            send_message_to_administrators(traceback.format_exc() + '\n- Find Link worker exception')
-            session.rollback()
+            if isinstance(e, OperationalError):
+                logger.warning('Find link worker error: %s', e.args)
+                session.rollback()
+            else:
+                send_message_to_administrators(traceback.format_exc() + '\n- Find Link worker exception')
             find_link_queue.put(message)
             continue
 
