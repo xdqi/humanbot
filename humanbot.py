@@ -31,7 +31,7 @@ import cache
 import config
 from models import update_user_real, update_group_real, Session
 from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
-    peer_to_internal_id, test_and_join_public_channel
+    peer_to_internal_id, test_and_join_public_channel, need_to_be_online
 import realbot
 
 logger = getLogger(__name__)
@@ -291,7 +291,7 @@ def update_message(update: Message):
 
     update_chat_generic(chat)
     update_user(update.from_id)
-    if random() < 1 / 10 and not isinstance(update.to_id, PeerUser):
+    if need_to_be_online():
         client.send_read_acknowledge(client.get_entity(update.to_id), max_id=update.id)
 
 
