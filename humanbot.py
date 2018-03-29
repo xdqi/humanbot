@@ -16,6 +16,7 @@ from ast import literal_eval
 from sqlalchemy.exc import OperationalError
 
 from telethon.errors import SessionPasswordNeededError
+from telethon import events
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
     InviteHashExpiredError, InviteHashInvalidError
 from telethon.tl.types import \
@@ -390,7 +391,7 @@ def main():
 
     logger.info('Client initialized succesfully!')
 
-    client.add_update_handler(update_handler_wrapper)
+    client.add_event_handler(update_handler_wrapper, events.Raw)
     realbot.main()
     Thread(target=auto_add_chat_worker).start()
     Thread(target=message_insert_worker).start()

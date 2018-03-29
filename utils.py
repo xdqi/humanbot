@@ -11,6 +11,7 @@ from random import sample, randint
 
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
+from raven.transport import ThreadedRequestsHTTPTransport
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
@@ -26,7 +27,7 @@ import models
 from senders import bot, client
 
 logger = getLogger(__name__)
-raven_client = RavenClient(config.RAVEN_DSN)
+raven_client = RavenClient(config.RAVEN_DSN, transport=ThreadedRequestsHTTPTransport)
 
 
 class FakeResponse():
