@@ -71,7 +71,7 @@ def find_link_to_join(session, msg: str):
         except (InviteHashExpiredError, InviteHashInvalidError) as e:
             report_exception()
             continue
-        if isinstance(group, ChatInvite) and group.participants_count > 1:
+        if isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join {} with /joinprv {}'.format(
                     link,
