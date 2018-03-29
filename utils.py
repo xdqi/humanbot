@@ -255,11 +255,14 @@ def get_next_online_time():
     now = datetime.now()
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     result = midnight + timedelta(days=1, hours=randint(10, 23), minutes=randint(0, 59), seconds=randint(0, 59))
-    return result.timestamp()
+    return int(result.timestamp())
 
 
 def need_to_be_online():
     global_count = cache.RedisDict('global_count')
+    if not global_count['online_time']:
+        global_count['online_time'] = get_next_online_time()
+        return False
     if int(global_count['online_time']) - get_now_timestamp() > 600:
         global_count['online_time'] = get_next_online_time()
         return True
