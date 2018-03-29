@@ -14,7 +14,7 @@ from raven import Client as RavenClient
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
-from telegram.error import BadRequest, RetryAfter
+from telegram.error import BadRequest, RetryAfter, TimedOut
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
@@ -203,7 +203,7 @@ def test_and_join_public_channel(session, link) -> (int, bool):
     try:
         sleep(0.1)
         info = fetcher.get_chat('@' + link)
-    except (BadRequest, RetryAfter) as e:
+    except (BadRequest, RetryAfter, TimedOut) as e:
         report_exception()
         if isinstance(e, RetryAfter):
             logger.warning('bot retry after %s seconds', e.retry_after)
