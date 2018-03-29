@@ -100,10 +100,11 @@ def send_message_to_administrators(msg: str):
         exception = msg.splitlines()[-1]
         url_path = upload_log(buffer, path, filename)
 
-        msg = 'Long message: ... {}\nURL: {}{}'.format(
+        msg = 'Long message: ... {}\nURL: {}{}\nTime: {}'.format(
             exception,
             config.LOG_URL,
-            url_path
+            url_path,
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
     bot.send_message(chat_id=config.ADMIN_CHANNEL,
                      text=msg.strip(),
