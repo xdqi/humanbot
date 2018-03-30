@@ -193,6 +193,9 @@ def get_available_bot() -> Bot:
         if float(v) > get_now_timestamp():
             blacklist.add(k)
 
+    if len(all_bot - blacklist) < 3:
+        return None
+
     return Bot(token=sample(all_bot - blacklist, 1)[0])
 
 
@@ -205,6 +208,8 @@ def test_and_join_public_channel(session, link) -> (int, bool):
     gid = None
     joined = False
     fetcher = get_available_bot()
+    if not fetcher:
+        return None, False
     try:
         sleep(0.1)
         info = fetcher.get_chat('@' + link)
