@@ -19,6 +19,7 @@ from telegram.error import TelegramError, BadRequest, RetryAfter, TimedOut
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
+from telethon.errors.rpc_error_list import ChannelsTooMuchError
 from telethon.utils import get_peer_id
 
 import config
@@ -234,7 +235,11 @@ def test_and_join_public_channel(session, link) -> (int, bool):
             if (info.title and is_chinese_message(info.title)) or \
                (info.description and is_chinese_message(info.description)) or \
                is_chinese_group(group, info):  # we do it after logging it to our system
-                result = client.invoke(JoinChannelRequest(group))
+                try:
+                    result = client.invoke(JoinChannelRequest(group))
+                except ChannelsTooMuchError:
+                    logger.error('Too many groups! It\'s time to sign up for a new account')
+                    return gid, False
                 send_message_to_administrators(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
                                                f'members: {count}\n'
                                                )
