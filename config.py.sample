@@ -1,9 +1,17 @@
 TG_API_ID = 0
 TG_API_HASH = 'xxxxxxxxxxxxxxxxxxxxxxx'
 
-SESSION_NAME = 'bot'
-PHONE_NUMBER = '+1xxxxxxxxx'
-MY_UID = 4444444444
+INVOKER_SESSION_NAME = 'bot'
+
+CLIENTS = [
+    {
+        'name': 'my lovely bot',
+        'session_name': 'bot',
+        'phone_number': '+1xxxxxxxxx',
+        'uid': 555555555
+    },
+]
+
 ADMIN_UIDS = [1111111111]
 ADMIN_CHANNEL = -1001111111111
 

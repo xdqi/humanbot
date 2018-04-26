@@ -5,7 +5,7 @@ from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelReque
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telegram import Bot, Update
 
-from senders import client
+from senders import invoker
 
 
 logger = getLogger(__name__)
@@ -24,12 +24,12 @@ def evaluate_script_handler(bot: Bot, update: Update, text: str):
 
 def join_public_group_handler(bot: Bot, update: Update, text: str):
     logger.info('joining public group %s', text)
-    output = client.invoke(JoinChannelRequest(client.get_entity(text)))
+    output = invoker.invoke(JoinChannelRequest(invoker.get_entity(text)))
     return str(output)
 
 
 def join_private_group_handler(bot: Bot, update: Update, text: str):
-    output = client.invoke(ImportChatInviteRequest(text))
+    output = invoker.invoke(ImportChatInviteRequest(text))
     return str(output)
 
 
@@ -40,5 +40,5 @@ def leave_group_handler(bot: Bot, update: Update, text: str):
         link = text
         pass
     logger.info('leaving public group %s', link)
-    output = client.invoke(LeaveChannelRequest(client.get_entity(link)))
+    output = invoker.invoke(LeaveChannelRequest(invoker.get_entity(link)))
     return str(output)

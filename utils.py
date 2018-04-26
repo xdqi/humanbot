@@ -16,6 +16,7 @@ from raven.transport import ThreadedRequestsHTTPTransport
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
 from telegram.error import TelegramError, BadRequest, RetryAfter, TimedOut
+from telethon import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
@@ -25,7 +26,7 @@ from telethon.utils import get_peer_id
 import config
 import cache
 import models
-from senders import bot, client
+import senders
 
 logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=ThreadedRequestsHTTPTransport)
@@ -109,10 +110,10 @@ def send_message_to_administrators(msg: str):
             datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
     try:
-        bot.send_message(chat_id=config.ADMIN_CHANNEL,
-                         text=msg.strip(),
-                         parse_mode='HTML',
-                         disable_web_page_preview=False)
+        senders.bot.send_message(chat_id=config.ADMIN_CHANNEL,
+                                 text=msg.strip(),
+                                 parse_mode='HTML',
+                                 disable_web_page_preview=False)
     except TelegramError:
         report_exception()
 
@@ -123,7 +124,7 @@ def is_chinese_message(message: str):
 
 
 def is_chinese_group(group, info):
-    result = client.invoke(GetHistoryRequest(
+    result = senders.invoker.invoke(GetHistoryRequest(
         peer=group,
         offset_id=0,
         offset_date=None,
@@ -232,12 +233,12 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                 logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
                 return gid, False
 
-            group = client.get_input_entity(link)  # type: InputChannel
+            group = senders.invoker.get_input_entity(link)  # type: InputChannel
             if (info.title and is_chinese_message(info.title)) or \
                (info.description and is_chinese_message(info.description)) or \
                is_chinese_group(group, info):  # we do it after logging it to our system
                 try:
-                    result = client.invoke(JoinChannelRequest(group))
+                    result = senders.invoker.invoke(JoinChannelRequest(group))
                 except ChannelsTooMuchError:
                     logger.error('Too many groups! It\'s time to sign up for a new account')
                     return gid, False

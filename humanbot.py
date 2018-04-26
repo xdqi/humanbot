@@ -9,7 +9,6 @@ import re
 from time import sleep
 from logging import getLogger, INFO, WARNING, basicConfig
 from pdb import Pdb
-from random import random
 from signal import signal, SIGUSR1
 from ast import literal_eval
 
@@ -28,7 +27,7 @@ from telethon.tl.types import \
 from telethon.tl.functions.messages import CheckChatInviteRequest
 from telethon.utils import resolve_id
 
-from senders import client
+from senders import invoker, clients
 import models
 import cache
 import config
@@ -68,7 +67,7 @@ def find_link_to_join(session, msg: str):
             continue
         recent_found_links.add(invite_hash)
         try:
-            group = client.invoke(CheckChatInviteRequest(invite_hash))
+            group = invoker.invoke(CheckChatInviteRequest(invite_hash))
         except (InviteHashExpiredError, InviteHashInvalidError) as e:
             report_exception()
             continue
@@ -188,7 +187,7 @@ def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
 
 
 user_last_changed = cache.RedisExpiringSet('user_last_changed', expire=3600)
-def update_user(user_id):
+def update_user(client, user_id):
     if user_id is None or user_id in user_last_changed:  # user should be updated at a minute basis
         return
     try:
@@ -202,7 +201,7 @@ def update_user(user_id):
 
 
 group_last_changed = cache.RedisExpiringSet('group_last_changed', expire=3600)
-def update_group(chat_id: int, title: str = None):
+def update_group(client, chat_id: int, title: str = None):
     """
     Try to update group information
 
@@ -222,7 +221,7 @@ def update_group(chat_id: int, title: str = None):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, group.username)
 
 
-def update_chat_generic(chat_id: int):
+def update_chat_generic(client, chat_id: int):
     """
     Received message
 
@@ -231,12 +230,12 @@ def update_chat_generic(chat_id: int):
     """
     input_entity = client.get_input_entity(chat_id)
     if isinstance(input_entity, InputUser):
-        update_user(chat_id)
+        update_user(client, chat_id)
     else:
-        update_group(chat_id)
+        update_group(client, chat_id)
 
 
-def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
+def update_group_title(client, chat_id: int, update: MessageActionChatEditTitle):
     """
     Update group title event handler
 
@@ -247,10 +246,10 @@ def update_group_title(chat_id: int, update: MessageActionChatEditTitle):
     name = update.title
     if str(chat_id) in group_last_changed:
         group_last_changed.discard(str(chat_id))
-    update_group(chat_id, name)
+    update_group(client, chat_id, name)
 
 
-def download_file(media: MessageMediaPhoto):
+def download_file(client, media: MessageMediaPhoto):
     # download from telegram server
     buffer = BytesIO()
     client.download_media(media, buffer)
@@ -270,9 +269,9 @@ def download_file(media: MessageMediaPhoto):
     return buffer, path, filename
 
 
-def download_upload_ocr(media: MessageMediaPhoto):
+def download_upload_ocr(client, media: MessageMediaPhoto):
     try:
-        buffer, path, filename = download_file(media)
+        buffer, path, filename = download_file(client, media)
     except (ValueError, RuntimeError, OSError, AttributeError):
         report_exception()
         return 'tgpic://download-failed'
@@ -281,8 +280,8 @@ def download_upload_ocr(media: MessageMediaPhoto):
     return ocr(fullpath)
 
 
-def update_message(update: Message):
-    if isinstance(update.to_id, PeerUser) and update.to_id.user_id == config.MY_UID:  # private message
+def update_message(client, update: Message):
+    if isinstance(update.to_id, PeerUser) and update.to_id.user_id == client.get_me().user_id:  # private message
         chat = update.from_id
     else:
         chat = peer_to_internal_id(update.to_id)
@@ -291,41 +290,41 @@ def update_message(update: Message):
     elif isinstance(update.media, (MessageMediaDocument, MessageMediaPhoto)):
         text = update.message or ''  # in case it is `None`
         if isinstance(update.media, MessageMediaPhoto):
-            result = download_upload_ocr(update.media)
+            result = download_upload_ocr(client, update.media)
             text = result + '\n' + text
             insert_message_local_timezone(chat, update.from_id, text, update.date)
 
-    update_chat_generic(chat)
-    update_user(update.from_id)
+    update_chat_generic(client, chat)
+    update_user(client, update.from_id)
     if need_to_be_online():
         client.send_read_acknowledge(client.get_entity(update.to_id), max_id=update.id)
 
 
-def update_message_from_chat(update: UpdateShortChatMessage):
+def update_message_from_chat(client, update: UpdateShortChatMessage):
     insert_message_local_timezone(-update.chat_id, update.from_id, update.message, update.date)
-    update_group(-update.chat_id)
-    update_user(update.from_id)
+    update_group(client, -update.chat_id)
+    update_user(client, update.from_id)
 
 
-def update_message_from_user(update: UpdateShortMessage):
+def update_message_from_user(client, update: UpdateShortMessage):
     insert_message_local_timezone(update.user_id, update.user_id, update.message, update.date)
-    update_user(update.user_id)
+    update_user(client, update.user_id)
 
 
-def update_handler(update):
+def update_handler(client, update):
     logger.debug('humanbot %s', update)
     if isinstance(update, (UpdateNewChannelMessage, UpdateNewMessage)):  # message from group/user
         if isinstance(update.message, Message):  # message
-            update_message(update.message)
+            update_message(client, update.message)
         elif isinstance(update.message, MessageService):  # action
             if isinstance(update.message.action, MessageActionChatEditTitle):
-                update_group_title(peer_to_internal_id(update.message.to_id), update.message.action)
+                update_group_title(client, peer_to_internal_id(update.message.to_id), update.message.action)
 
     elif isinstance(update, UpdateShortMessage):  # private message
-        update_message_from_user(update)
+        update_message_from_user(client, update)
 
     elif isinstance(update, UpdateShortChatMessage):  # short message from normal group
-        update_message_from_chat(update)
+        update_message_from_chat(client, update)
 
     elif isinstance(update, UpdateUserStatus):  # user status update
         pass
@@ -342,12 +341,12 @@ global_count = cache.RedisDict('global_count')
 global_count['received_message'] = 0
 global_count['total_used_time'] = 0
 global_count['start_time'] = get_now_timestamp()
-def update_handler_wrapper(update):
+def update_handler_wrapper(client, update):
     prev_num = int(thread_called_count.get(current_thread().name, 0))
     thread_called_count[current_thread().name] = prev_num + 1
     process_start_time = datetime.now()
     try:
-        update_handler(update)
+        update_handler(client, update)
     except Exception as e:
         report_exception()
         info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
@@ -375,32 +374,50 @@ def main():
     basicConfig(level=INFO)
     logger.setLevel(INFO)
     getLogger('telethon').setLevel(WARNING)
-    logger.info('Connecting to Telegram Servers...')
-    client.connect()
 
-    if not client.is_user_authorized():
-        logger.info('Unauthorized user')
-        client.send_code_request(config.PHONE_NUMBER)
-        code_ok = False
-        while not code_ok:
-            code = input('Enter the auth code: ')
-            try:
-                code_ok = client.sign_in(config.PHONE_NUMBER, code)
-            except SessionPasswordNeededError:
-                password = input('Two step verification enabled. Please enter your password: ')
-                code_ok = client.sign_in(password=password)
+    # launch clients
+    print(clients)
+    for i in range(len(config.CLIENTS)):
+        client = clients[i]
+        conf = config.CLIENTS[i]
 
-    logger.info('Client initialized succesfully!')
+        logger.info(f'Connecting to Telegram Servers with {conf["name"]}...')
+        client.connect()
 
-    client.add_event_handler(update_handler_wrapper, events.Raw)
+        if not client.is_user_authorized():
+            logger.info('Unauthorized user')
+            client.send_code_request(conf["phone_number"])
+            code_ok = False
+            while not code_ok:
+                code = input('Enter the auth code: ')
+                try:
+                    code_ok = client.sign_in(conf["phone_number"], code)
+                except SessionPasswordNeededError:
+                    password = input('Two step verification enabled. Please enter your password: ')
+                    code_ok = client.sign_in(password=password)
+
+        logger.info(f'Client {conf["name"]} initialized succesfully!')
+
+        client.add_event_handler(lambda e: update_handler_wrapper(client, e), events.Raw)
+
+    # launching bot and workers
     realbot.main()
     Thread(target=auto_add_chat_worker).start()
     Thread(target=message_insert_worker).start()
     Thread(target=sms.main).start()
+
+    # for debugging
     signal(SIGUSR1, lambda x, y: Pdb().set_trace(y))
+
     while 1:
-        sleep(1)
-    client.disconnect()
+        try:
+            sleep(1)
+        except KeyboardInterrupt:
+            break
+
+    # cleanup
+    for client in config.CLIENTS:
+        client.disconnect()
 
 
 if __name__ == '__main__':
