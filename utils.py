@@ -19,7 +19,7 @@ from telegram.error import TelegramError, BadRequest, RetryAfter, TimedOut
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
-from telethon.errors.rpc_error_list import ChannelsTooMuchError
+from telethon.errors.rpc_error_list import ChannelsTooMuchError, FloodWaitError
 from telethon.utils import get_peer_id, resolve_id
 
 import config
@@ -232,7 +232,11 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                 logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
                 return gid, False
 
-            group = senders.invoker.get_input_entity(link)  # type: InputChannel
+            try:
+                group = senders.invoker.get_input_entity(link)  # type: InputChannel
+            except FloodWaitError as e:
+                logger.warning('Get group via username flooded. %r', e)
+                return gid, False
             if (info.title and is_chinese_message(info.title)) or \
                (info.description and is_chinese_message(info.description)) or \
                is_chinese_group(group, info):  # we do it after logging it to our system
