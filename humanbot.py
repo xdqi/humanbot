@@ -151,7 +151,6 @@ def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
         find_link_queue.put(msg)
 
 
-
 find_link_worker_status = cache.RedisDict('find_link_worker_status')
 find_link_queue = cache.RedisQueue('find_link_queue')
 def auto_add_chat_worker():
@@ -267,6 +266,44 @@ def download_upload_ocr(client, media: MessageMediaPhoto):
     return ocr(fullpath)
 
 
+thread_called_count = cache.RedisDict('thread_called_count')
+global_count = cache.RedisDict('global_count')
+global_count['received_message'] = 0
+global_count['total_used_time'] = 0
+global_count['start_time'] = get_now_timestamp()
+def update_handler_wrapper(func):
+    def wrapped(event):
+        prev_num = int(thread_called_count.get(current_thread().name, 0))
+        thread_called_count[current_thread().name] = prev_num + 1
+        process_start_time = datetime.now()
+        try:
+            func(event)
+        except Exception as e:
+            report_exception()
+            info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
+            exc = traceback.format_exc()
+            send_to_admin = True
+
+            # special process with common exceptions
+            if isinstance(e, ValueError) and 'find the input entity for "PeerUser' in e.args[0]:
+                exc = e.args[0]
+                send_to_admin = False
+            elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
+                exc = repr(e.args)
+
+            logger.error(info + exc)
+            if send_to_admin:  # exception that should be send to administrator
+                send_message_to_administrators(info + exc)
+
+            process_end_time = datetime.now()
+            process_time = process_end_time - process_start_time
+            global_count.incrby('received_message', 1)
+            global_count.incrby('total_used_time', int(process_time.total_seconds()))
+
+    return wrapped
+
+
+@update_handler_wrapper
 def update_new_message_handler(event: events.NewMessage.Event):
     text = event.text
 
@@ -284,6 +321,7 @@ def update_new_message_handler(event: events.NewMessage.Event):
         event.client.send_read_acknowledge(event.input_chat, max_id=event.message.id, clear_mentions=True)
 
 
+@update_handler_wrapper
 def update_chat_action_handler(event: events.ChatAction.Event):
     if event.user_added or event.user_joined or event.user_left or event.user_kicked:
         update_user(event.client, event.user_id)
@@ -291,45 +329,15 @@ def update_chat_action_handler(event: events.ChatAction.Event):
         update_group(event.client, event.chat_id, event.new_title)
 
 
+@update_handler_wrapper
 def update_edited_message_handler(event: events.MessageEdited.Event):
     pass
 
+
+@update_handler_wrapper
 def update_deleted_message_handler(event: events.MessageDeleted.Event):
     pass
 
-
-thread_called_count = cache.RedisDict('thread_called_count')
-global_count = cache.RedisDict('global_count')
-global_count['received_message'] = 0
-global_count['total_used_time'] = 0
-global_count['start_time'] = get_now_timestamp()
-def update_handler_wrapper(update):
-    prev_num = int(thread_called_count.get(current_thread().name, 0))
-    thread_called_count[current_thread().name] = prev_num + 1
-    process_start_time = datetime.now()
-    try:
-        update_handler(update.client, update)
-    except Exception as e:
-        report_exception()
-        info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
-        exc = traceback.format_exc()
-        send_to_admin = True
-
-        # special process with common exceptions
-        if isinstance(e, ValueError) and 'find the input entity for "PeerUser' in e.args[0]:
-            exc = e.args[0]
-            send_to_admin = False
-        elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
-            exc = repr(e.args)
-
-        logger.error(info + exc)
-        if send_to_admin:  # exception that should be send to administrator
-            send_message_to_administrators(info + exc)
-
-    process_end_time = datetime.now()
-    process_time = process_end_time - process_start_time
-    global_count.incrby('received_message', 1)
-    global_count.incrby('total_used_time', int(process_time.total_seconds()))
 
 
 def main():
