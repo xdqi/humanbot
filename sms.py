@@ -1,44 +1,39 @@
-import http.server
-import cgi
 import utils
 import logging
 import config
 
+from flask import Flask, request
+from twilio.twiml.voice_response import VoiceResponse
+from twilio.twiml.messaging_response import MessagingResponse
+
+
 logger = logging.getLogger(__name__)
+app = Flask(__name__)
 
 
-class SmsHandler(http.server.BaseHTTPRequestHandler):
-    server_version = 'WebhookHandler/1.0'
+@app.route(config.VOICE_WEBHOOK_PATH, methods=['POST'])
+def record():
+    sender = request.values.get('From', '<unknown number>')
+    me = request.values.get('To', '<unknown number>')
+    logger.warning(f'Recorded from {sender} to {me}.')
 
-    def do_HEAD(self):
-        self.send_response(200)
-        self.end_headers()
+    response = VoiceResponse()
+    response.record()
+    response.hangup()
+    return str(response)
 
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
 
-    def do_POST(self):
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={'REQUEST_METHOD':'POST',
-                     'CONTENT_TYPE':self.headers['Content-Type'],
-                     })
-        sender = form.getvalue('From', '<unknown number>')
-        me = form.getvalue('To', '<unknown number>')
-        body = form.getvalue('Body', '<unknown message>')
-        logger.warning(f'Received SMS from {sender} to {me}: \n{body}')
-        utils.send_message_to_administrators(f'Received SMS from {sender} to {me}: \n{body}')
-        self.send_response(204)
-        self.end_headers()
+@app.route(config.SMS_WEBHOOK_PATH, methods=['POST'])
+def sms():
+    sender = request.values.get('From', '<unknown number>')
+    me = request.values.get('To', '<unknown number>')
+    body = request.values.get('Body', '<unknown message>')
+
+    logger.warning(f'Received SMS from {sender} to {me}: \n{body}')
+    utils.send_message_to_administrators(f'Received SMS from {sender} to {me}: \n{body}')
+    return str(MessagingResponse())
 
 
 def main():
-    server = http.server.HTTPServer((config.SMS_WEBHOOK_LISTEN, config.SMS_WEBHOOK_PORT), SmsHandler)
-    logger.info('SMS Webhook server started')
-    server.serve_forever()
-
-
-if __name__ == '__main__':
-    main()
+    logger.info('SMS and Video webhook server started')
+    app.run(host=config.SMS_WEBHOOK_LISTEN, port=config.SMS_WEBHOOK_PORT)

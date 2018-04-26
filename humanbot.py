@@ -36,6 +36,7 @@ from models import update_user_real, update_group_real, Session
 from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
     peer_to_internal_id, test_and_join_public_channel, need_to_be_online
 import realbot
+import sms
 
 logger = getLogger(__name__)
 
@@ -354,7 +355,7 @@ def update_handler_wrapper(update):
         send_to_admin = True
 
         # special process with common exceptions
-        if isinstance(e, ValueError) and 'encountered this peer before' in e.args[0]:
+        if isinstance(e, ValueError) and ('encountered this peer before' in e.args[0] or 'find the input entity for "PeerUser' in e.args[0]):
             exc = e.args[0]
             send_to_admin = False
         elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
@@ -395,6 +396,7 @@ def main():
     realbot.main()
     Thread(target=auto_add_chat_worker).start()
     Thread(target=message_insert_worker).start()
+    Thread(target=sms.main).start()
     signal(SIGUSR1, lambda x, y: Pdb().set_trace(y))
     while 1:
         sleep(1)
