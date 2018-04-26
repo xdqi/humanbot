@@ -16,12 +16,11 @@ from raven.transport import ThreadedRequestsHTTPTransport
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
 from telegram.error import TelegramError, BadRequest, RetryAfter, TimedOut
-from telethon import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import Channel, Chat, InputChannel
 from telethon.errors.rpc_error_list import ChannelsTooMuchError
-from telethon.utils import get_peer_id
+from telethon.utils import get_peer_id, resolve_id
 
 import config
 import cache
@@ -266,6 +265,11 @@ def peer_to_internal_id(peer):
     :return:
     """
     return get_peer_id(peer)
+
+
+def internal_id_to_peer(marked_id: int):
+    i, t = resolve_id(marked_id)
+    return t(i)
 
 
 def get_next_online_time():

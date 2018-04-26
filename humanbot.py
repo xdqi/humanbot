@@ -221,24 +221,11 @@ def update_group(client, chat_id: int, title: str = None):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, group.username)
 
 
-def update_chat_generic(client, chat_id: int):
-    """
-    Received message
-
-    :param chat_id: bot marked format chat id
-    :return:
-    """
-    input_entity = client.get_input_entity(chat_id)
-    if isinstance(input_entity, InputUser):
-        update_user(client, chat_id)
-    else:
-        update_group(client, chat_id)
-
-
 def update_group_title(client, chat_id: int, update: MessageActionChatEditTitle):
     """
     Update group title event handler
 
+    :param client: current client instance
     :param chat_id: Bot marked chat id
     :param update:
     :return:
@@ -280,60 +267,35 @@ def download_upload_ocr(client, media: MessageMediaPhoto):
     return ocr(fullpath)
 
 
-def update_message(client, update: Message):
-    if isinstance(update.to_id, PeerUser) and update.to_id.user_id == client.get_me().user_id:  # private message
-        chat = update.from_id
-    else:
-        chat = peer_to_internal_id(update.to_id)
-    if update.message:
-        insert_message_local_timezone(chat, update.from_id, update.message, update.date)
-    elif isinstance(update.media, (MessageMediaDocument, MessageMediaPhoto)):
-        text = update.message or ''  # in case it is `None`
-        if isinstance(update.media, MessageMediaPhoto):
-            result = download_upload_ocr(client, update.media)
-            text = result + '\n' + text
-            insert_message_local_timezone(chat, update.from_id, text, update.date)
+def update_new_message_handler(event: events.NewMessage.Event):
+    text = event.text
 
-    update_chat_generic(client, chat)
-    update_user(client, update.from_id)
+    if event.photo:
+        result = download_upload_ocr(event.client, event.media)
+        text = result + '\n' + event.text
+
+    insert_message_local_timezone(event.chat_id, event.sender_id, text, event.message.date)
+
+    update_user(event.client, event.sender_id)
+    if event.is_group or event.is_channel:
+        update_group(event.client, event.chat_id)
+
     if need_to_be_online():
-        client.send_read_acknowledge(client.get_entity(update.to_id), max_id=update.id)
+        event.client.send_read_acknowledge(event.input_chat, max_id=event.message.id, clear_mentions=True)
 
 
-def update_message_from_chat(client, update: UpdateShortChatMessage):
-    insert_message_local_timezone(-update.chat_id, update.from_id, update.message, update.date)
-    update_group(client, -update.chat_id)
-    update_user(client, update.from_id)
+def update_chat_action_handler(event: events.ChatAction.Event):
+    if event.user_added or event.user_joined or event.user_left or event.user_kicked:
+        update_user(event.client, event.user_id)
+    if event.created or event.new_title:
+        update_group(event.client, event.chat_id, event.new_title)
 
 
-def update_message_from_user(client, update: UpdateShortMessage):
-    insert_message_local_timezone(update.user_id, update.user_id, update.message, update.date)
-    update_user(client, update.user_id)
+def update_edited_message_handler(event: events.MessageEdited.Event):
+    pass
 
-
-def update_handler(client, update):
-    logger.debug('humanbot %s', update)
-    if isinstance(update, (UpdateNewChannelMessage, UpdateNewMessage)):  # message from group/user
-        if isinstance(update.message, Message):  # message
-            update_message(client, update.message)
-        elif isinstance(update.message, MessageService):  # action
-            if isinstance(update.message.action, MessageActionChatEditTitle):
-                update_group_title(client, peer_to_internal_id(update.message.to_id), update.message.action)
-
-    elif isinstance(update, UpdateShortMessage):  # private message
-        update_message_from_user(client, update)
-
-    elif isinstance(update, UpdateShortChatMessage):  # short message from normal group
-        update_message_from_chat(client, update)
-
-    elif isinstance(update, UpdateUserStatus):  # user status update
-        pass
-
-    elif isinstance(update, UpdateUserName):  # user name change
-        update_user_real(update.user_id, update.first_name, update.last_name, update.username, None)
-
-    else:
-        pass
+def update_deleted_message_handler(event: events.MessageDeleted.Event):
+    pass
 
 
 thread_called_count = cache.RedisDict('thread_called_count')
@@ -341,12 +303,12 @@ global_count = cache.RedisDict('global_count')
 global_count['received_message'] = 0
 global_count['total_used_time'] = 0
 global_count['start_time'] = get_now_timestamp()
-def update_handler_wrapper(client, update):
+def update_handler_wrapper(update):
     prev_num = int(thread_called_count.get(current_thread().name, 0))
     thread_called_count[current_thread().name] = prev_num + 1
     process_start_time = datetime.now()
     try:
-        update_handler(client, update)
+        update_handler(update.client, update)
     except Exception as e:
         report_exception()
         info = 'Exception raised on PID {}, {}\n'.format(getpid(), current_thread())
@@ -354,7 +316,7 @@ def update_handler_wrapper(client, update):
         send_to_admin = True
 
         # special process with common exceptions
-        if isinstance(e, ValueError) and ('encountered this peer before' in e.args[0] or 'find the input entity for "PeerUser' in e.args[0]):
+        if isinstance(e, ValueError) and 'find the input entity for "PeerUser' in e.args[0]:
             exc = e.args[0]
             send_to_admin = False
         elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
@@ -376,10 +338,8 @@ def main():
     getLogger('telethon').setLevel(WARNING)
 
     # launch clients
-    print(clients)
-    for i in range(len(config.CLIENTS)):
-        client = clients[i]
-        conf = config.CLIENTS[i]
+    for conf in config.CLIENTS:
+        client = conf['client']  # type: TelegramClient
 
         logger.info(f'Connecting to Telegram Servers with {conf["name"]}...')
         client.connect()
@@ -398,7 +358,10 @@ def main():
 
         logger.info(f'Client {conf["name"]} initialized succesfully!')
 
-        client.add_event_handler(lambda e: update_handler_wrapper(client, e), events.Raw)
+        client.add_event_handler(update_new_message_handler, events.NewMessage)
+        client.add_event_handler(update_chat_action_handler, events.ChatAction)
+        client.add_event_handler(update_edited_message_handler, events.MessageEdited)
+        client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
 
     # launching bot and workers
     realbot.main()
@@ -416,8 +379,8 @@ def main():
             break
 
     # cleanup
-    for client in config.CLIENTS:
-        client.disconnect()
+    for conf in config.CLIENTS:
+        conf['client'].disconnect()
 
 
 if __name__ == '__main__':
