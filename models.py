@@ -9,7 +9,7 @@ from sqlalchemy import Column, Integer, Text, BigInteger, String
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 import config
-from utils import get_now_timestamp
+import utils
 
 Base = declarative_base()
 logger = getLogger(__name__)
@@ -102,7 +102,7 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
                                      first_name=first_name,
                                      last_name=last_name,
                                      lang_code=lang_code,
-                                     date=get_now_timestamp()
+                                     date=utils.get_now_timestamp()
                                      )
             session.add(change)
     try:
@@ -137,7 +137,7 @@ def update_group_real(chat_id, name, link):
             change = GroupHistory(gid=chat_id,
                                   name=name,
                                   link=link,
-                                  date=get_now_timestamp()
+                                  date=utils.get_now_timestamp()
                                   )
             session.add(change)
     try:

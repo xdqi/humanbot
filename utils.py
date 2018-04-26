@@ -148,6 +148,7 @@ Messages: {[m.message if hasattr(m, 'message') else '' for m in result.messages]
 
 
 def report_exception():
+    return
     raven_client.captureException()
 
 

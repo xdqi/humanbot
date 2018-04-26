@@ -11,3 +11,5 @@ redis
 raven
 
 gevent
+
+twilio
