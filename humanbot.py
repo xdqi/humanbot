@@ -186,7 +186,15 @@ class FindLinkWorker(Worker):
         find_link_to_join(session, message)
 
 
-def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=models.ChatFlag.new):
+def find_link_enqueue(msg: str):
+    if FindLinkWorker.queue.qsize() > 50:
+        send_message_to_administrators('Find link queue full, worker dead?')
+        FindLinkWorker().start()
+    else:
+        FindLinkWorker.queue.put(msg)
+
+
+def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=models.ChatFlag.new, find_link=True):
     if not msg:  # Not text message
         return
     utc_timestamp = int(date.timestamp())
@@ -199,16 +207,15 @@ def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datet
                 flag=flag)
 
     MessageInsertWorker.queue.put(repr(chat))
-    if FindLinkWorker.queue.qsize() > 50:
-        send_message_to_administrators('Find link queue full, worker dead?')
-        FindLinkWorker().start()
-    else:
-        FindLinkWorker.queue.put(msg)
+
+    if not find_link:
+        return
+    find_link_enqueue(msg)
 
 
 def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=models.ChatFlag.new):
     utc_date = date.replace(tzinfo=timezone.utc)
-    insert_message(chat_id, message_id, user_id, msg, utc_date, flag)
+    insert_message(chat_id, message_id, user_id, msg, utc_date, flag, find_link=False)
 
 
 user_last_changed = cache.RedisExpiringSet('user_last_changed', expire=3600)
@@ -327,6 +334,7 @@ def update_new_message_handler(event: events.NewMessage.Event):
         text = result + '\n' + event.text
 
     insert_message_local_timezone(event.chat_id, event.message.id, event.sender_id, text, event.message.date, flag)
+    find_link_enqueue(event.raw_text)
 
     update_user(event.client, event.sender_id)
     if event.is_group or event.is_channel:
