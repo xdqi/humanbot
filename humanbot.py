@@ -145,7 +145,7 @@ class MessageMarkWorker(Worker):
             models.ChatNew.chat_id == request_changes['chat_id'],
             models.ChatNew.message_id == request_changes['message_id']
         ).update({
-            models.ChatNew.flag: models.ChatNew.flag.op('|')(2)
+            models.ChatNew.flag: models.ChatNew.flag.op('|')(models.ChatFlag.deleted)
         }, synchronize_session='fetch')
 
 
