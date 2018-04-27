@@ -83,38 +83,45 @@ def error_handler(bot: Bot, update: Update, error: Exception):
 
 def main():
     logger.setLevel(INFO)
-    updater = Updater(token=config.BOT_TOKEN)
+    Bot.delete_webhook = lambda self: True
 
-    # set up webhook
-    updater.start_webhook(listen=config.BOT_WEBHOOK_LISTEN,
-                          port=config.BOT_WEBHOOK_PORT,
-                          url_path=config.BOT_WEBHOOK_PATH)
-    res = updater.bot.set_webhook(url=config.BOT_WEBHOOK_URL)
-    logger.info('Start webhook returns %s', res)
+    for conf in config.BOTS:
+        updater = Updater(token=conf['token'])
+        # set up webhook
+        updater.start_webhook(listen=conf['host'],
+                              port=conf['port'],
+                              url_path=conf['path'])
 
-    # set up message handlers
-    dispatcher = updater.dispatcher
+        # set up message handlers
+        dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(AdminCommandHandler('exec', admin.execute_command_handler))
-    dispatcher.add_handler(AdminCommandHandler('py', admin.evaluate_script_handler))
-    dispatcher.add_handler(AdminCommandHandler('joinpub', admin.join_public_group_handler))
-    dispatcher.add_handler(AdminCommandHandler('joinprv', admin.join_private_group_handler))
-    dispatcher.add_handler(AdminCommandHandler('leave', admin.leave_group_handler))
-    dispatcher.add_handler(AdminCommandHandler(['stats', 'stat'], humanbot.statistics_handler))
-    dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
-    dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
-    dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
+        # admin bot only
+        if conf['token'] == config.BOT_TOKEN:
+            res = updater.bot.set_webhook(url=conf['url'])
+            logger.info('Start webhook for %s returns %s', conf['name'], res)
 
-    message_handler = MessageHandler(filters=Filters.text, edited_updates=True, callback=message)
-    dispatcher.add_handler(message_handler)
+            dispatcher.add_handler(AdminCommandHandler('exec', admin.execute_command_handler))
+            dispatcher.add_handler(AdminCommandHandler('py', admin.evaluate_script_handler))
+            dispatcher.add_handler(AdminCommandHandler('joinpub', admin.join_public_group_handler))
+            dispatcher.add_handler(AdminCommandHandler('joinprv', admin.join_private_group_handler))
+            dispatcher.add_handler(AdminCommandHandler('leave', admin.leave_group_handler))
+            dispatcher.add_handler(AdminCommandHandler(['stats', 'stat'], humanbot.statistics_handler))
+            dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
+            dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
+            dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
 
-    picture_handler = MessageHandler(filters=Filters.photo | Filters.document, edited_updates=True, callback=message)
-    dispatcher.add_handler(picture_handler)
+        message_handler = MessageHandler(filters=Filters.text, edited_updates=True, callback=message)
+        dispatcher.add_handler(message_handler)
 
-    all_handler = MessageHandler(filters=Filters.all, callback=log_message)
-    dispatcher.add_handler(all_handler)
+        picture_handler = MessageHandler(filters=Filters.photo | Filters.document, edited_updates=True, callback=message)
+        dispatcher.add_handler(picture_handler)
 
-    dispatcher.add_error_handler(error_handler)
+        all_handler = MessageHandler(filters=Filters.all, callback=log_message)
+        dispatcher.add_handler(all_handler)
+
+        dispatcher.add_error_handler(error_handler)
+
+        logger.info('Webhook server is ready for %s', conf['name'])
 
 
 if __name__ == '__main__':
