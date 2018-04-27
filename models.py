@@ -1,11 +1,8 @@
-import traceback
-from datetime import datetime
 from logging import getLogger
-from queue import Queue
-
 from sqlalchemy import engine_from_config
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, Text, BigInteger, String
+from sqlalchemy import Column, Index, \
+    Integer, BigInteger, SmallInteger, String, Text
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 import config
@@ -22,6 +19,29 @@ class Chat(Base):
     user_id = Column('userid', Integer(), index=True)
     text = Column('text', Text())
     date = Column('date', Integer(), index=True)
+
+
+class ChatFlag:
+    new = 0
+    edited = 1
+    deleted = 2
+
+
+class ChatNew(Base):
+    __tablename__ = 'chat_new'
+    id = Column('id', Integer(), primary_key=True, autoincrement=True)
+    chat_id = Column('chatid', BigInteger(), index=True)
+    message_id = Column('messageid', Integer())
+    user_id = Column('userid', Integer(), index=True)
+    text = Column('text', Text())
+    date = Column('time', Integer(), index=True)
+    flag = Column('flag', SmallInteger(), index=True)
+    __table_args__ = (
+        Index('ix_chat_new_chatid_messageid', chat_id, message_id),
+        Index('ix_chat_new_chatid_userid', chat_id, user_id),
+        Index('ix_chat_new_chatid_flag', chat_id, flag),
+        Index('ix_chat_new_userid_flag', user_id, flag),
+    )
 
 
 class User(Base):

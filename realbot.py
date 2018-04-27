@@ -36,7 +36,7 @@ def update_group(bot: Bot, chat_id: int):
 def message(bot: Bot, update: Update):
     msg = update.message  # type: Message
     user = msg.from_user  # type: User
-    humanbot.insert_message(msg.chat_id, user.id, msg.text, msg.date)
+    humanbot.insert_message(msg.chat_id, msg.message_id, user.id, msg.text, msg.date)
     update_user(user)
     update_group(bot, msg.chat_id)
 
@@ -64,7 +64,7 @@ def picture(bot: Bot, update: Update):
         logger.info('ocr result:\n%s', result)
         text = result + '\n' + caption
 
-    humanbot.insert_message(msg.chat_id, user.id, text, msg.date)
+    humanbot.insert_message(msg.chat_id, msg.message_id, user.id, text, msg.date)
     update_user(user)
     update_group(bot, msg.chat_id)
 

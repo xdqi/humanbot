@@ -17,11 +17,8 @@ from sqlalchemy.exc import OperationalError
 from telethon.errors import SessionPasswordNeededError
 from telethon import events
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
-    InviteHashExpiredError, InviteHashInvalidError
-from telethon.tl.types import \
-    UpdateNewChannelMessage, UpdateShortMessage, UpdateShortChatMessage, UpdateNewMessage, \
-    UpdateUserStatus, UpdateUserName, Message, MessageService, MessageMediaPhoto, MessageMediaDocument, \
-    MessageActionChatEditTitle, \
+    InviteHashExpiredError, InviteHashInvalidError, FloodWaitError
+from telethon.tl.types import MessageMediaPhoto, \
     PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
     ChatInvite
 from telethon.tl.functions.messages import CheckChatInviteRequest
@@ -71,6 +68,9 @@ def find_link_to_join(session, msg: str):
         except (InviteHashExpiredError, InviteHashInvalidError) as e:
             report_exception()
             continue
+        except FloodWaitError as e:
+            logger.warning('Unable to resolve now, %r', e)
+            continue
         if isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
             send_message_to_administrators('invitation from {}: {}, {} members\n'
                                            'Join {} with /joinprv {}'.format(
@@ -94,7 +94,7 @@ def message_insert_worker():
             if message is None:
                 sleep(0.01)
                 continue
-            chat = models.Chat(**literal_eval(message))
+            chat = models.ChatNew(**literal_eval(message))
             session.add(chat)
             session.commit()
             insert_queue.task_done()
@@ -104,6 +104,37 @@ def message_insert_worker():
             report_exception()
             session.rollback()
             insert_queue.put(message)
+
+    session.close()
+    Session.remove()
+
+
+mark_worker_status = cache.RedisDict('mark_worker_status')
+mark_queue = cache.RedisQueue('mark_queue')
+def message_mark_worker():
+    session = Session()
+
+    while True:
+        try:
+            message = mark_queue.get()  # type: str
+            if message is None:
+                sleep(0.01)
+                continue
+            request_changes = literal_eval(message)  # {'chat_id': 114, 'message_id': 514}
+            session.query(models.ChatNew).filter(
+                models.ChatNew.chat_id == request_changes['chat_id'],
+                models.ChatNew.message_id == request_changes['message_id']
+            ).update({
+                models.ChatNew.flag: models.ChatNew.flag.op('|')(2)
+            }, synchronize_session='fetch')
+            session.commit()
+            mark_queue.task_done()
+            mark_worker_status['last'] = get_now_timestamp()
+            mark_worker_status['size'] = mark_queue.qsize()
+        except:
+            report_exception()
+            session.rollback()
+            mark_queue.put(message)
 
     session.close()
     Session.remove()
@@ -129,19 +160,28 @@ def workers_handler(bot, update, text):
     insert_size = insert_queue.qsize()
     find_link_last = int(find_link_worker_status['last'])
     find_link_size = find_link_queue.qsize()
+    mark_last = int(mark_worker_status['last'])
+    mark_size = mark_queue.qsize()
     return 'Input Message Worker: {} seconds ago, size {}\n' \
-           'Find Link Worker: {} seconds ago, size {}'.format(
+           'Mark Worker: {} seconds ago, size {}\n' \
+           'Find Link Worker: {} seconds ago, size {}\n'.format(
                 get_now_timestamp() - insert_last, insert_size,
+                get_now_timestamp() - mark_last, mark_size,
                 get_now_timestamp() - find_link_last, find_link_size
             )
 
 
-def insert_message(chat_id: int, user_id: int, msg: str, date: datetime):
+def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=models.ChatFlag.new):
     if not msg:  # Not text message
         return
     utc_timestamp = int(date.timestamp())
 
-    chat = dict(chat_id=chat_id, user_id=user_id, text=msg, date=utc_timestamp)
+    chat = dict(chat_id=chat_id,
+                message_id=message_id,
+                user_id=user_id,
+                text=msg,
+                date=utc_timestamp,
+                flag=flag)
 
     insert_queue.put(repr(chat))
     if find_link_queue.qsize() > 50:
@@ -180,9 +220,9 @@ def auto_add_chat_worker():
     Session.remove()
 
 
-def insert_message_local_timezone(chat_id, user_id, msg, date: datetime):
+def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=models.ChatFlag.new):
     utc_date = date.replace(tzinfo=timezone.utc)
-    insert_message(chat_id, user_id, msg, utc_date)
+    insert_message(chat_id, message_id, user_id, msg, utc_date, flag)
 
 
 user_last_changed = cache.RedisExpiringSet('user_last_changed', expire=3600)
@@ -218,21 +258,6 @@ def update_group(client, chat_id: int, title: str = None):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, None)
     elif isinstance(group, (Channel, ChannelFull)):
         update_group_real(peer_to_internal_id(chat_id), title or group.title, group.username)
-
-
-def update_group_title(client, chat_id: int, update: MessageActionChatEditTitle):
-    """
-    Update group title event handler
-
-    :param client: current client instance
-    :param chat_id: Bot marked chat id
-    :param update:
-    :return:
-    """
-    name = update.title
-    if str(chat_id) in group_last_changed:
-        group_last_changed.discard(str(chat_id))
-    update_group(client, chat_id, name)
 
 
 def download_file(client, media: MessageMediaPhoto):
@@ -307,11 +332,15 @@ def update_handler_wrapper(func):
 def update_new_message_handler(event: events.NewMessage.Event):
     text = event.text
 
+    flag = models.ChatFlag.new
+    if isinstance(event, events.MessageEdited.Event):
+        flag = models.ChatFlag.edited
+
     if event.photo:
         result = download_upload_ocr(event.client, event.media)
         text = result + '\n' + event.text
 
-    insert_message_local_timezone(event.chat_id, event.sender_id, text, event.message.date)
+    insert_message_local_timezone(event.chat_id, event.message.id, event.sender_id, text, event.message.date, flag)
 
     update_user(event.client, event.sender_id)
     if event.is_group or event.is_channel:
@@ -330,14 +359,13 @@ def update_chat_action_handler(event: events.ChatAction.Event):
 
 
 @update_handler_wrapper
-def update_edited_message_handler(event: events.MessageEdited.Event):
-    pass
-
-
-@update_handler_wrapper
 def update_deleted_message_handler(event: events.MessageDeleted.Event):
-    pass
-
+    if not event.chat_id:
+        logger.error('got a deleted event with chat_id None and message_id %r', event.deleted_ids)
+        return
+    for message_id in event.deleted_ids:
+        mark_queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
+    update_group(event.client, event.chat_id)
 
 
 def main():
@@ -368,13 +396,14 @@ def main():
 
         client.add_event_handler(update_new_message_handler, events.NewMessage)
         client.add_event_handler(update_chat_action_handler, events.ChatAction)
-        client.add_event_handler(update_edited_message_handler, events.MessageEdited)
+        client.add_event_handler(update_new_message_handler, events.MessageEdited)
         client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
 
     # launching bot and workers
     realbot.main()
     Thread(target=auto_add_chat_worker).start()
     Thread(target=message_insert_worker).start()
+    Thread(target=message_mark_worker).start()
     Thread(target=sms.main).start()
 
     # for debugging
