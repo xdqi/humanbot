@@ -105,10 +105,10 @@ def main():
     dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
     dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
 
-    message_handler = MessageHandler(filters=Filters.text, allow_edited=True, callback=message)
+    message_handler = MessageHandler(filters=Filters.text, edited_updates=True, callback=message)
     dispatcher.add_handler(message_handler)
 
-    picture_handler = MessageHandler(filters=Filters.photo | Filters.document, allow_edited=True, callback=message)
+    picture_handler = MessageHandler(filters=Filters.photo | Filters.document, edited_updates=True, callback=message)
     dispatcher.add_handler(picture_handler)
 
     all_handler = MessageHandler(filters=Filters.all, callback=log_message)
