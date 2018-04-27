@@ -113,9 +113,14 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     else:  # existing user
         same = user.first_name == first_name and user.last_name == last_name and user.username == username
         if not same:  # information changed
-            changed_before = session.query(UsernameHistory).filter(UsernameHistory.uid == user_id).one_or_none()
+            changed_before = session.query(UsernameHistory).filter(UsernameHistory.uid == user_id).count()
             if not changed_before:
-                original = UsernameHistory(**user, date=0)
+                original = UsernameHistory(uid=user_id,
+                                           username=user.username,
+                                           first_name=user.first_name,
+                                           last_name=user.last_name,
+                                           lang_code=user.lang_code,
+                                           date=0)
                 session.add(original)
             user.first_name = first_name
             user.last_name = last_name
@@ -156,9 +161,12 @@ def update_group_real(chat_id, name, link):
     else:  # existing group
         same = group.name == name and group.link == link
         if not same:  # information changed
-            changed_before = session.query(GroupHistory).filter(GroupHistory.gid == chat_id).one_or_none()
+            changed_before = session.query(GroupHistory).filter(GroupHistory.gid == chat_id).count()
             if not changed_before:
-                original = GroupHistory(**group, date=0)
+                original = GroupHistory(gid=chat_id,
+                                        name=group.name,
+                                        link=group.link,
+                                        date=0)
                 session.add(original)
             group.name = name
             group.link = link
