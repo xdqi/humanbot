@@ -83,61 +83,68 @@ def find_link_to_join(session, msg: str):
             )
 
 
-insert_worker_status = cache.RedisDict('insert_worker_status')
-insert_queue = cache.RedisQueue('insert_queue')
-def message_insert_worker():
-    session = Session()
-
-    while True:
-        try:
-            message = insert_queue.get()  # type: str
-            if message is None:
-                sleep(0.01)
-                continue
-            chat = models.ChatNew(**literal_eval(message))
-            session.add(chat)
-            session.commit()
-            insert_queue.task_done()
-            insert_worker_status['last'] = get_now_timestamp()
-            insert_worker_status['size'] = insert_queue.qsize()
-        except:
-            report_exception()
-            session.rollback()
-            insert_queue.put(message)
-
-    session.close()
-    Session.remove()
+class WorkProperties(type):
+    def __new__(mcs, class_name, class_bases, class_dict):
+        name = class_dict['name']
+        new_class_dict = class_dict.copy()
+        new_class_dict['status'] = cache.RedisDict(name + '_worker_status')
+        new_class_dict['queue'] = cache.RedisQueue(name + '_queue')
+        return type.__new__(mcs, class_name, class_bases, new_class_dict)
 
 
-mark_worker_status = cache.RedisDict('mark_worker_status')
-mark_queue = cache.RedisQueue('mark_queue')
-def message_mark_worker():
-    session = Session()
+class Worker(Thread, metaclass=WorkProperties):
+    name = ''
 
-    while True:
-        try:
-            message = mark_queue.get()  # type: str
-            if message is None:
-                sleep(0.01)
-                continue
-            request_changes = literal_eval(message)  # {'chat_id': 114, 'message_id': 514}
-            session.query(models.ChatNew).filter(
-                models.ChatNew.chat_id == request_changes['chat_id'],
-                models.ChatNew.message_id == request_changes['message_id']
-            ).update({
-                models.ChatNew.flag: models.ChatNew.flag.op('|')(2)
-            }, synchronize_session='fetch')
-            session.commit()
-            mark_queue.task_done()
-            mark_worker_status['last'] = get_now_timestamp()
-            mark_worker_status['size'] = mark_queue.qsize()
-        except:
-            report_exception()
-            session.rollback()
-            mark_queue.put(message)
+    def __init__(self):
+        super().__init__(name=self.name)
 
-    session.close()
-    Session.remove()
+    def run(self):
+        session = Session()
+
+        while True:
+            try:
+                message = self.queue.get()  # type: str
+                if message is None:
+                    sleep(0.01)
+                    continue
+                self.handler(session, message)
+                session.commit()
+                self.queue.task_done()
+                self.status['last'] = get_now_timestamp()
+                self.status['size'] = self.queue.qsize()
+            except KeyboardInterrupt:
+                break
+            except:
+                report_exception()
+                session.rollback()
+                self.queue.put(message)
+
+        session.close()
+        Session.remove()
+
+    def handler(self, session, message):
+        raise NotImplementedError
+
+
+class MessageInsertWorker(Worker):
+    name = 'insert'
+
+    def handler(self, session, message: str):
+        chat = models.ChatNew(**literal_eval(message))
+        session.add(chat)
+
+
+class MessageMarkWorker(Worker):
+    name = 'mark'
+
+    def handler(self, session, message: str):
+        request_changes = literal_eval(message)  # {'chat_id': 114, 'message_id': 514}
+        session.query(models.ChatNew).filter(
+            models.ChatNew.chat_id == request_changes['chat_id'],
+            models.ChatNew.message_id == request_changes['message_id']
+        ).update({
+            models.ChatNew.flag: models.ChatNew.flag.op('|')(2)
+        }, synchronize_session='fetch')
 
 
 def threads_handler(bot, update, text):
@@ -155,13 +162,12 @@ def statistics_handler(bot, update, text):
 
 
 def workers_handler(bot, update, text):
-    global insert_worker_status, find_link_worker_status
-    insert_last = int(insert_worker_status['last'])
-    insert_size = insert_queue.qsize()
-    find_link_last = int(find_link_worker_status['last'])
-    find_link_size = find_link_queue.qsize()
-    mark_last = int(mark_worker_status['last'])
-    mark_size = mark_queue.qsize()
+    insert_last = int(MessageInsertWorker.status['last'])
+    insert_size = MessageInsertWorker.queue.qsize()
+    find_link_last = int(FindLinkWorker.status['last'])
+    find_link_size = FindLinkWorker.queue.qsize()
+    mark_last = int(MessageMarkWorker.status['last'])
+    mark_size = MessageMarkWorker.queue.qsize()
     return 'Input Message Worker: {} seconds ago, size {}\n' \
            'Mark Worker: {} seconds ago, size {}\n' \
            'Find Link Worker: {} seconds ago, size {}\n'.format(
@@ -169,6 +175,13 @@ def workers_handler(bot, update, text):
                 get_now_timestamp() - mark_last, mark_size,
                 get_now_timestamp() - find_link_last, find_link_size
             )
+
+
+class FindLinkWorker(Worker):
+    name = 'find_link'
+
+    def handler(self, session, message):
+        find_link_to_join(session, message)
 
 
 def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=models.ChatFlag.new):
@@ -183,41 +196,12 @@ def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datet
                 date=utc_timestamp,
                 flag=flag)
 
-    insert_queue.put(repr(chat))
-    if find_link_queue.qsize() > 50:
+    MessageInsertWorker.queue.put(repr(chat))
+    if FindLinkWorker.queue.qsize() > 50:
         send_message_to_administrators('Find link queue full, worker dead?')
-        Thread(target=auto_add_chat_worker).start()
+        FindLinkWorker().start()
     else:
-        find_link_queue.put(msg)
-
-
-find_link_worker_status = cache.RedisDict('find_link_worker_status')
-find_link_queue = cache.RedisQueue('find_link_queue')
-def auto_add_chat_worker():
-    session = Session()
-
-    while True:
-        try:
-            message = find_link_queue.get()  # type: str
-            if message is None:
-                sleep(0.01)
-                continue
-            find_link_to_join(session, message)
-            find_link_queue.task_done()
-            find_link_worker_status['last'] = get_now_timestamp()
-            find_link_worker_status['size'] = find_link_queue.qsize()
-        except BaseException as e:
-            report_exception()
-            if isinstance(e, OperationalError):
-                logger.warning('Find link worker error: %s', e.args)
-                session.rollback()
-            else:
-                send_message_to_administrators(traceback.format_exc() + '\n- Find Link worker exception')
-            find_link_queue.put(message)
-            continue
-
-    session.close()
-    Session.remove()
+        FindLinkWorker.queue.put(msg)
 
 
 def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=models.ChatFlag.new):
@@ -364,7 +348,7 @@ def update_deleted_message_handler(event: events.MessageDeleted.Event):
         logger.error('got a deleted event with chat_id None and message_id %r', event.deleted_ids)
         return
     for message_id in event.deleted_ids:
-        mark_queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
+        MessageMarkWorker.queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
     update_group(event.client, event.chat_id)
 
 
@@ -401,9 +385,9 @@ def main():
 
     # launching bot and workers
     realbot.main()
-    Thread(target=auto_add_chat_worker).start()
-    Thread(target=message_insert_worker).start()
-    Thread(target=message_mark_worker).start()
+    FindLinkWorker().start()
+    MessageInsertWorker().start()
+    MessageMarkWorker().start()
     Thread(target=sms.main).start()
 
     # for debugging
