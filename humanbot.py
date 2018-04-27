@@ -15,7 +15,7 @@ from ast import literal_eval
 from sqlalchemy.exc import OperationalError
 
 from telethon.errors import SessionPasswordNeededError
-from telethon import events
+from telethon import events, TelegramClient
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
     InviteHashExpiredError, InviteHashInvalidError, FloodWaitError
 from telethon.tl.types import MessageMediaPhoto, \
@@ -24,7 +24,7 @@ from telethon.tl.types import MessageMediaPhoto, \
 from telethon.tl.functions.messages import CheckChatInviteRequest
 from telethon.utils import resolve_id
 
-from senders import invoker, clients
+from senders import invoker
 import models
 import cache
 import config
@@ -94,6 +94,8 @@ class WorkProperties(type):
 
 class Worker(Thread, metaclass=WorkProperties):
     name = ''
+    status = None  # type: cache.RedisDict
+    queue = None  # type: cache.RedisQueue
 
     def __init__(self):
         super().__init__(name=self.name)
