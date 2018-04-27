@@ -27,6 +27,17 @@ BOT_WEBHOOK_PORT = 8080
 BOT_WEBHOOK_PATH = 'tg-Webhook-xxxx'
 BOT_WEBHOOK_URL = 'https://webhook-url/' + BOT_WEBHOOK_PATH
 
+BOTS = [
+    {
+        'name': 'real bot',
+        'token': BOT_TOKEN,
+        'host': BOT_WEBHOOK_LISTEN,
+        'port': BOT_WEBHOOK_PORT,
+        'path': BOT_WEBHOOK_PATH,
+        'url': BOT_WEBHOOK_URL
+    },
+]
+
 SMS_WEBHOOK_LISTEN = '127.0.0.1'
 SMS_WEBHOOK_PORT = 8088
 SMS_WEBHOOK_PATH = '/sms'
