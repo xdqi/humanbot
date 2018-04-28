@@ -69,6 +69,7 @@ class Group(Base):
     gid = Column('id', BigInteger(), primary_key=True)
     name = Column('name', String(100))
     link = Column('link', String(50))
+    master = Column('master', Integer(), index=True)
 
 
 class GroupHistory(Base):
@@ -142,10 +143,11 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     Session.remove()
 
 
-def update_group_real(chat_id, name, link):
+def update_group_real(master_uid, chat_id, name, link):
     """
     Update group information to database
 
+    :param master_uid: Client/Bot User ID (bot marked format)
     :param chat_id: Group ID (bot marked format)
     :param name: Group Name
     :param link: Group Public Username (supergroup only)
@@ -156,10 +158,12 @@ def update_group_real(chat_id, name, link):
     session = Session()
     group = session.query(Group).filter(Group.gid == chat_id).one_or_none()
     if not group:  # new group
-        group = Group(gid=chat_id, name=name, link=link)
+        group = Group(gid=chat_id, name=name, link=link, master=master_uid)
         session.add(group)
     else:  # existing group
         same = group.name == name and group.link == link
+        if group.master is None:
+            group.master = master_uid
         if not same:  # information changed
             changed_before = session.query(GroupHistory).filter(GroupHistory.gid == chat_id).count()
             if not changed_before:

@@ -244,14 +244,12 @@ def update_group(client, chat_id: int, title: str = None):
     """
     if str(chat_id) in group_last_changed:  # user should be updated at a minute basis
         return
-    id, type = resolve_id(chat_id)
-    peer = type(id)
-    group = client.get_entity(peer)
+    group = client.get_entity(chat_id)
     group_last_changed.add(str(chat_id))
     if isinstance(group, (Chat, ChatFull)):
-        update_group_real(peer_to_internal_id(chat_id), title or group.title, None)
+        update_group_real(client.conf['uid'], peer_to_internal_id(chat_id), title or group.title, None)
     elif isinstance(group, (Channel, ChannelFull)):
-        update_group_real(peer_to_internal_id(chat_id), title or group.title, group.username)
+        update_group_real(client.conf['uid'], peer_to_internal_id(chat_id), title or group.title, group.username)
 
 
 def download_file(client, media: MessageMediaPhoto):

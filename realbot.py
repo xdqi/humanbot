@@ -31,7 +31,7 @@ def update_group(bot: Bot, chat_id: int):
     chat = bot.get_chat(chat_id)
     bot_group_last_changed.add(str(chat_id))
     if chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
-        update_group_real(chat.id, chat.title, chat.username)
+        update_group_real(bot.id, chat.id, chat.title, chat.username)
 
 
 def message(bot: Bot, update: Update):
@@ -108,6 +108,7 @@ def main():
             dispatcher.add_handler(AdminCommandHandler(['stats', 'stat'], humanbot.statistics_handler))
             dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
             dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
+            dispatcher.add_handler(AdminCommandHandler('dialogs', admin.dialogs_handler))
             dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
 
         message_handler = MessageHandler(filters=Filters.text, edited_updates=True, callback=message)

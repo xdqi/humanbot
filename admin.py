@@ -5,7 +5,8 @@ from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelReque
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telegram import Bot, Update
 
-from senders import invoker
+from senders import invoker, clients
+import utils
 
 
 logger = getLogger(__name__)
@@ -42,3 +43,16 @@ def leave_group_handler(bot: Bot, update: Update, text: str):
     logger.info('leaving public group %s', link)
     output = invoker.invoke(LeaveChannelRequest(invoker.get_entity(link)))
     return str(output)
+
+
+def dialogs_handler(bot: Bot, update: Update, text: str):
+    result = ''
+    for client in clients:
+        uid = client.get_me(input_peer=True).user_id
+        result += f'-- For client with UID {uid}\n'
+        for dialog in client.get_dialogs():
+            result += f'UPDATE groups SET master = {uid} WHERE gid = {dialog.id};\n'
+    result += '-- Generation complete\n'
+    utils.send_message_to_administrators(result)
+
+    return 'Generation complete'

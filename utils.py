@@ -251,7 +251,8 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                 joined = True
 
             try:
-                new_group = models.Group(gid=gid, name=info.title, link=link)
+                new_group = models.Group(gid=gid, name=info.title, link=link,
+                                         master=senders.invoker.conf['uid'] if joined else None)
                 session.add(new_group)
                 session.commit()
             except:
