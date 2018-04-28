@@ -11,6 +11,7 @@ from logging import getLogger, INFO, WARNING, basicConfig
 from pdb import Pdb
 from signal import signal, SIGUSR1
 from ast import literal_eval
+from functools import wraps
 
 from sqlalchemy.exc import OperationalError
 
@@ -290,6 +291,7 @@ global_count['received_message'] = 0
 global_count['total_used_time'] = 0
 global_count['start_time'] = get_now_timestamp()
 def update_handler_wrapper(func):
+    @wraps(func)
     def wrapped(event):
         prev_num = int(thread_called_count.get(current_thread().name, 0))
         thread_called_count[current_thread().name] = prev_num + 1
