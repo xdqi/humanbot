@@ -18,7 +18,7 @@ from sqlalchemy.exc import OperationalError
 from telethon.errors import SessionPasswordNeededError
 from telethon import events, TelegramClient
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
-    InviteHashExpiredError, InviteHashInvalidError, FloodWaitError
+    InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelPrivateError
 from telethon.tl.types import MessageMediaPhoto, \
     PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
     ChatInvite
@@ -353,8 +353,14 @@ def update_chat_action_handler(event: events.ChatAction.Event):
         logger.warning(msg)
         send_message_to_administrators(msg)
     else:
-        update_group(event.client, event.chat_id)
-
+        try:
+            update_group(event.client, event.chat_id)
+        except ChannelPrivateError as e:
+            msg = f'{event.user.username} (uid {event.user.id}) was kicked by' \
+                  f' {event.kicked_by.username} (uid {event.kicked_by.id})'
+            msg += traceback.format_exc()
+            logger.warning(msg)
+            send_message_to_administrators(msg)
 
 @update_handler_wrapper
 def update_deleted_message_handler(event: events.MessageDeleted.Event):
@@ -365,6 +371,8 @@ def update_deleted_message_handler(event: events.MessageDeleted.Event):
         MessageMarkWorker.queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
     update_group(event.client, event.chat_id)
 
+
+# TODO: add handler to handle UpdateChannel
 
 def main():
     basicConfig(level=INFO)
