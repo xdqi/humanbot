@@ -105,7 +105,7 @@ def send_message_to_administrators(msg: str):
     if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
         buffer = BytesIO(msg.encode('utf-8'))
         now = datetime.now()
-        date = now.strftime('%y/%m')
+        date = now.strftime('%y/%m/%d')
         timestamp = now.timestamp()
         path = '/{}'.format(date)
         thread_name = current_thread().name
