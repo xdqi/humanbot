@@ -15,12 +15,12 @@ logger = getLogger(__name__)
 def execute_command_handler(bot: Bot, update: Update, text: str):
     logger.info('executing command %s', text)
     with popen(text) as f:
-        return f.read()
+        return '<pre>' + utils.tg_html_entity(repr((f.read())) + '</pre>')
 
 
 def evaluate_script_handler(bot: Bot, update: Update, text: str):
     logger.info('evaluating script %s', text)
-    return repr(eval(text))
+    return '<pre>' + utils.tg_html_entity(repr(eval(text))) + '</pre>'
 
 
 def join_public_group_handler(bot: Bot, update: Update, text: str):
