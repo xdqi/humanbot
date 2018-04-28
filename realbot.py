@@ -55,7 +55,7 @@ def message(bot: Bot, update: Update):
         buffer.seek(0)
 
         now = datetime.now()
-        path = '/{}/{}'.format(now.year, now.month)
+        path = '{}/{}'.format(now.year, now.month)
         filename = '{}-{}.jpg'.format(int(now.timestamp()), file.file_id)
 
         fullpath = upload_pic(buffer, path, filename)

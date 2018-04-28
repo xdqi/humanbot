@@ -12,6 +12,7 @@ from random import sample, randint
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
 from raven.transport import ThreadedRequestsHTTPTransport
+from minio import Minio
 
 from telegram import Bot, Update, Message
 from telegram.ext import CommandHandler, Filters
@@ -29,6 +30,10 @@ import senders
 
 logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=ThreadedRequestsHTTPTransport)
+minio_client = Minio(endpoint=config.MINIO_SERVER,
+                     access_key=config.MINIO_ACCESS_KEY,
+                     secret_key=config.MINIO_SECRET_KEY,
+                     secure=config.MINIO_SECURE)
 
 
 class FakeResponse():
@@ -46,7 +51,7 @@ def wget_retry(url, remaining_retry=1):
         return wget_retry(url, remaining_retry - 1)
 
 
-def upload_generic(buffer, root, path, filename) -> str:
+def upload_local(buffer: BytesIO, root, path, filename) -> str:
     url_path = '{}/{}'.format(path, filename)
     # copy to local network drive
     makedirs('{}{}'.format(root, path), exist_ok=True)
@@ -57,17 +62,23 @@ def upload_generic(buffer, root, path, filename) -> str:
     return url_path
 
 
+def upload_minio(buffer: BytesIO, path, filename) -> str:
+    url_path = '{}/{}'.format(path, filename)
+    minio_client.put_object(config.MINIO_BUCKET, url_path, buffer, buffer.getbuffer().nbytes)
+    return url_path
+
+
 def upload_pic(buffer, path, filename) -> str:
-    return upload_generic(buffer, config.PIC_PATH, path, filename)
+    return upload_minio(buffer, path, filename)
 
 
 def upload_log(buffer, path, filename) -> str:
-    return upload_generic(buffer, config.LOG_PATH, path, filename)
+    return upload_local(buffer, config.LOG_PATH, path, filename)
 
 
 def ocr(fullpath: str):
     # do the ocr on server
-    result = 'tgpic://kosaka/{}{}'.format(config.FTP_NAME, fullpath)
+    result = 'tgpic://kosaka/{}/{}'.format(config.FTP_NAME, fullpath)
     req = wget_retry(config.OCR_URL + fullpath)
     ocr_result = req.json()  # type: dict
     if 'body' in ocr_result.keys():

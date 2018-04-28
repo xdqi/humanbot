@@ -263,7 +263,7 @@ def download_file(client, media: MessageMediaPhoto):
     original = media.photo.sizes[-1]  # type: PhotoSize
     location = original.location  # type: FileLocation
     now = datetime.now()
-    path = '/{}/{}'.format(now.year, now.month)
+    path = '{}/{}'.format(now.year, now.month)
     filename = '{}-{}_{}_{}.jpg'.format(get_now_timestamp(),
                                         location.dc_id,
                                         location.volume_id,

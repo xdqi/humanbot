@@ -4,6 +4,8 @@ python-telegram-bot
 requests
 flask
 
+minio
+
 sqlalchemy
 mysql-connector-python
 redis

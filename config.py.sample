@@ -46,8 +46,13 @@ VOICE_WEBHOOK_PATH = '/voice'
 GROUP_BLACKLIST = ['joinchat', 'socks']
 GROUP_MEMBER_JOIN_LIMIT = 20
 
+MINIO_SERVER = 's3.amazonaws.com'
+MINIO_SECURE = True
+MINIO_BUCKET = 'pic-bucket'
+MINIO_ACCESS_KEY = 'access-key'
+MINIO_SECRET_KEY = 'secret-key'
+
 FTP_NAME = 'example-xxx'
-PIC_PATH = 'pic-path'
 PIC_URL = 'http://example-xxx/pic'
 LOG_PATH = 'log-path'
 LOG_URL = 'http://example-xxx/log'
