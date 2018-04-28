@@ -350,8 +350,12 @@ def update_new_message_handler(event: events.NewMessage.Event):
 def update_chat_action_handler(event: events.ChatAction.Event):
     if event.user_added or event.user_joined or event.user_left or event.user_kicked:
         update_user(event.client, event.user_id)
-    if event.created or event.new_title:
-        update_group(event.client, event.chat_id, event.new_title)
+    if event.user_kicked and event.user_id in [conf['uid'] for conf in config.CLIENTS]:
+        msg = f'I, {event.client.conf["name"]}, was kicked by {event.kicked_by.username} (uid {event.kicked_by.id})'
+        logger.warning(msg)
+        send_message_to_administrators(msg)
+    else:
+        update_group(event.client, event.chat_id)
 
 
 @update_handler_wrapper
