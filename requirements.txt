@@ -5,7 +5,7 @@ requests
 flask
 
 sqlalchemy
-mysql-connector-python==8.0.5
+mysql-connector-python
 redis
 
 raven
