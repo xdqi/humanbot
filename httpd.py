@@ -3,6 +3,7 @@ import logging
 import config
 
 from flask import Flask, request
+from gevent.wsgi import WSGIServer
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
 
@@ -37,4 +38,5 @@ def sms():
 
 def main():
     logger.info('Bot, SMS and Audio webhook server started')
-    app.run(host=config.SMS_WEBHOOK_LISTEN, port=config.SMS_WEBHOOK_PORT)
+    server = WSGIServer((config.SMS_WEBHOOK_LISTEN, config.SMS_WEBHOOK_PORT), app)
+    server.serve_forever()
