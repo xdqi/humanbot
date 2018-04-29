@@ -107,7 +107,7 @@ def main():
 
         # set up message handlers
         dispatcher = updater.dispatcher
-        Thread(target=dispatcher.start, name='dispatcher').start()
+        Thread(target=dispatcher.start, name='dispatcher-' + conf['name']).start()
         httpd.app.add_url_rule(conf['path'], conf['name'], methods=['POST'])
 
         # admin bot only
