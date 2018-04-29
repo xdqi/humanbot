@@ -2,7 +2,6 @@ import traceback
 from os import getpid
 from threading import current_thread
 from typing import List
-from io import BytesIO
 from datetime import datetime
 from logging import getLogger, INFO, DEBUG
 from threading import Thread
@@ -15,7 +14,7 @@ import flask
 import config
 import workers
 import senders
-from utils import upload_pic, ocr, report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp
+from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp
 import cache
 from models import update_user_real, update_group_real
 import admin
@@ -111,8 +110,8 @@ def main():
 
         # admin bot only
         if conf['token'] == config.BOT_TOKEN:
-            # res = updater.bot.set_webhook(url=conf['url'])
-            # logger.info('Start webhook for %s returns %s', conf['name'], res)
+            res = updater.bot.set_webhook(url=conf['url'])
+            logger.info('Start webhook for %s returns %s', conf['name'], res)
 
             dispatcher.add_handler(AdminCommandHandler('exec', admin.execute_command_handler))
             dispatcher.add_handler(AdminCommandHandler('py', admin.evaluate_script_handler))

@@ -4,7 +4,6 @@ import traceback
 from os import getpid
 from threading import current_thread, Thread
 from datetime import datetime, timezone
-from io import BytesIO
 import re
 from time import sleep
 from logging import getLogger, INFO, WARNING, basicConfig
