@@ -13,17 +13,14 @@ from signal import signal, SIGUSR1
 from ast import literal_eval
 from functools import wraps
 
-from sqlalchemy.exc import OperationalError
-
 from telethon.errors import SessionPasswordNeededError
 from telethon import events, TelegramClient
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
     InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelPrivateError
-from telethon.tl.types import MessageMediaPhoto, \
+from telethon.tl.types import MessageMediaPhoto, PhotoSize, FileLocation, \
     PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
     ChatInvite
 from telethon.tl.functions.messages import CheckChatInviteRequest
-from telethon.utils import resolve_id
 
 from senders import invoker
 import models
@@ -32,8 +29,8 @@ import config
 from models import update_user_real, update_group_real, Session
 from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
     peer_to_internal_id, test_and_join_public_channel, need_to_be_online
+import httpd
 import realbot
-import sms
 
 logger = getLogger(__name__)
 
@@ -410,7 +407,7 @@ def main():
     FindLinkWorker().start()
     MessageInsertWorker().start()
     MessageMarkWorker().start()
-    Thread(target=sms.main).start()
+    Thread(target=httpd.main, name='httpd').start()
 
     # for debugging
     signal(SIGUSR1, lambda x, y: Pdb().set_trace(y))

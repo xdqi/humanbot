@@ -16,6 +16,7 @@ def record():
     sender = request.values.get('From', '<unknown number>')
     me = request.values.get('To', '<unknown number>')
     logger.warning(f'Recorded from {sender} to {me}.')
+    utils.send_message_to_administrators(f'Recorded voice from {sender} to {me}.')
 
     response = VoiceResponse()
     response.record()
@@ -35,5 +36,5 @@ def sms():
 
 
 def main():
-    logger.info('SMS and Video webhook server started')
+    logger.info('Bot, SMS and Audio webhook server started')
     app.run(host=config.SMS_WEBHOOK_LISTEN, port=config.SMS_WEBHOOK_PORT)

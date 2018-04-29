@@ -5,9 +5,12 @@ from typing import List
 from io import BytesIO
 from datetime import datetime
 from logging import getLogger, INFO, DEBUG
+from threading import Thread
+import json
 
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update, Bot, Message, User, PhotoSize, Chat
+import flask
 
 import config
 from utils import upload_pic, ocr, report_exception, AdminCommandHandler, show_commands_handler
@@ -15,6 +18,7 @@ import cache
 from models import update_user_real, update_group_real
 import admin
 import models
+import httpd
 import humanbot
 
 logger = getLogger(__name__)
@@ -81,19 +85,30 @@ def error_handler(bot: Bot, update: Update, error: Exception):
         traceback.print_exc()
 
 
+def bot_handler(updater: Updater):
+    if flask.request.headers.get('content-type').lower() == 'application/json':
+        json_string = flask.request.get_data().decode('utf-8')
+        logger.debug('Webhook received data: ' + json_string)
+
+        update = Update.de_json(json.loads(json_string), updater.bot)
+        logger.debug('Received Update with ID %d on Webhook' % update.update_id)
+
+        updater.update_queue.put(update)
+    else:
+        flask.abort(403)
+
+
 def main():
     logger.setLevel(INFO)
     Bot.delete_webhook = lambda self: True
 
     for conf in config.BOTS:
         updater = Updater(token=conf['token'])
-        # set up webhook
-        updater.start_webhook(listen=conf['host'],
-                              port=conf['port'],
-                              url_path=conf['path'])
 
         # set up message handlers
         dispatcher = updater.dispatcher
+        Thread(target=dispatcher.start, name='dispatcher').start()
+        httpd.app.add_url_rule(conf['path'], conf['name'], methods=['POST'])
 
         # admin bot only
         if conf['token'] == config.BOT_TOKEN:
