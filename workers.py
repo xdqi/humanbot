@@ -70,6 +70,11 @@ class Worker(Thread, metaclass=WorkProperties):
     def handler(self, session, message: str):
         raise NotImplementedError
 
+    @classmethod
+    def stat(cls):
+        return '{} Worker: {} seconds ago, size {}\n'.format(
+            cls.name, get_now_timestamp() - int(cls.status['last']), cls.queue.qsize())
+
 
 class MessageInsertWorker(Worker):
     name = 'insert'
@@ -195,20 +200,8 @@ class FetchHistoryWorker(Worker):
 
 
 def workers_handler(bot, update, text):
-    insert_last = int(MessageInsertWorker.status['last'])
-    insert_size = MessageInsertWorker.queue.qsize()
-    find_link_last = int(FindLinkWorker.status['last'])
-    find_link_size = FindLinkWorker.queue.qsize()
-    mark_last = int(MessageMarkWorker.status['last'])
-    mark_size = MessageMarkWorker.queue.qsize()
-    ocr_last = int(OcrWorker.status['last'])
-    ocr_size = OcrWorker.queue.qsize()
-    return 'Input Message Worker: {} seconds ago, size {}\n' \
-           'Mark Worker: {} seconds ago, size {}\n' \
-           'Ocr Worker: {} seconds ago, size {}\n' \
-           'Find Link Worker: {} seconds ago, size {}\n'.format(
-                get_now_timestamp() - insert_last, insert_size,
-                get_now_timestamp() - mark_last, mark_size,
-                get_now_timestamp() - ocr_last, ocr_size,
-                get_now_timestamp() - find_link_last, find_link_size
-            )
+    return MessageInsertWorker.stat() + \
+           MessageMarkWorker.stat() + \
+           FindLinkWorker.stat() + \
+           OcrWorker.stat() + \
+           FetchHistoryWorker.stat()
