@@ -120,6 +120,7 @@ def main():
             dispatcher.add_handler(AdminCommandHandler(['stats', 'stat'], humanbot.statistics_handler))
             dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
             dispatcher.add_handler(AdminCommandHandler('workers', workers.workers_handler))
+            dispatcher.add_handler(AdminCommandHandler('fetch', workers.history_add_handler))
             dispatcher.add_handler(AdminCommandHandler('dialogs', admin.dialogs_handler))
             dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
 

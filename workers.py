@@ -199,6 +199,11 @@ class FetchHistoryWorker(Worker):
                                         msg.fwd_from.lang_code)
 
 
+def history_add_handler(bot, update, text):
+    FetchHistoryWorker.queue.put(text)
+    return 'Added {} into history fetching queue'.format(text)
+
+
 def workers_handler(bot, update, text):
     return MessageInsertWorker.stat() + \
            MessageMarkWorker.stat() + \
