@@ -15,11 +15,11 @@ CLIENTS = [
 ADMIN_UIDS = [1111111111]
 ADMIN_CHANNEL = -1001111111111
 
-BOT_TOKEN = 'xxxxxxx:yyyyyyyyyyyyyyyyyy'
+BOT_TOKEN = '222222222:yyyyyyyyyyyyyyyyyy'
 
 BOT_TOKENS = {
     BOT_TOKEN,
-    'xxxxxxx:yyyyyyyyyyyyyyyyyy'
+    '222222222:yyyyyyyyyyyyyyyyyy'
 }
 
 BOT_WEBHOOK_LISTEN = '127.0.0.1'
@@ -31,6 +31,7 @@ BOTS = [
     {
         'name': 'real bot',
         'token': BOT_TOKEN,
+        'uid': 222222222,
         'host': BOT_WEBHOOK_LISTEN,
         'port': BOT_WEBHOOK_PORT,
         'path': BOT_WEBHOOK_PATH,
@@ -57,6 +58,7 @@ PIC_URL = 'http://example-xxx/pic'
 LOG_PATH = 'log-path'
 LOG_URL = 'http://example-xxx/log'
 
+OCR_HINT = '--OCR-HINT--'
 OCR_URL = 'http://typ-style-ocr-server-url/http/picture-server-http-url'
 RAVEN_DSN = 'https://user:pass@sentry.io/id'
 

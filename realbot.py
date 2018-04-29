@@ -13,7 +13,9 @@ from telegram import Update, Bot, Message, User, PhotoSize, Chat
 import flask
 
 import config
-from utils import upload_pic, ocr, report_exception, AdminCommandHandler, show_commands_handler
+import workers
+import senders
+from utils import upload_pic, ocr, report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp
 import cache
 from models import update_user_real, update_group_real
 import admin
@@ -50,22 +52,18 @@ def message(bot: Bot, update: Update):
     text = msg.text
 
     if msg.photo:  # type: List[PhotoSize]
-        text = msg.caption or ''  # in case of `None`
+        text = msg.text or msg.caption or ''  # in case of `None`
         photo = max(msg.photo, key=lambda p: p.file_size)  # type: PhotoSize
-        file = bot.get_file(photo.file_id)
-
-        buffer = BytesIO()
-        file.download(out=buffer)
-        buffer.seek(0)
-
         now = datetime.now()
-        path = '{}/{}'.format(now.year, now.month)
-        filename = '{}-{}.jpg'.format(int(now.timestamp()), file.file_id)
 
-        fullpath = upload_pic(buffer, path, filename)
-        result = ocr(fullpath)
-        logger.info('ocr result:\n%s', result)
-        text = result + '\n' + text
+        info = repr(dict(
+            client=bot.id,
+            file_id=photo.file_id,
+            path='{}/{}'.format(now.year, now.month),
+            filename='{}-{}.jpg'.format(get_now_timestamp(), photo.file_id)
+        ))
+
+        text = config.OCR_HINT + '\n' + info + '\n' + text
 
     humanbot.insert_message(msg.chat_id, msg.message_id, user.id, text, msg.date, flag)
     update_user(user)
@@ -109,11 +107,12 @@ def main():
         dispatcher = updater.dispatcher
         Thread(target=dispatcher.start, name='dispatcher-' + conf['name']).start()
         httpd.app.add_url_rule(conf['path'], conf['name'], methods=['POST'])
+        senders.clients[conf['uid']] = updater.bot
 
         # admin bot only
         if conf['token'] == config.BOT_TOKEN:
-            res = updater.bot.set_webhook(url=conf['url'])
-            logger.info('Start webhook for %s returns %s', conf['name'], res)
+            # res = updater.bot.set_webhook(url=conf['url'])
+            # logger.info('Start webhook for %s returns %s', conf['name'], res)
 
             dispatcher.add_handler(AdminCommandHandler('exec', admin.execute_command_handler))
             dispatcher.add_handler(AdminCommandHandler('py', admin.evaluate_script_handler))
@@ -122,7 +121,7 @@ def main():
             dispatcher.add_handler(AdminCommandHandler('leave', admin.leave_group_handler))
             dispatcher.add_handler(AdminCommandHandler(['stats', 'stat'], humanbot.statistics_handler))
             dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
-            dispatcher.add_handler(AdminCommandHandler('workers', humanbot.workers_handler))
+            dispatcher.add_handler(AdminCommandHandler('workers', workers.workers_handler))
             dispatcher.add_handler(AdminCommandHandler('dialogs', admin.dialogs_handler))
             dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
 

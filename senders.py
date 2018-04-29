@@ -1,13 +1,13 @@
 from telegram import Bot
 from telethon import TelegramClient
 import config
-from typing import List
+from typing import Dict
 
 __all__ = ['bot', 'invoker', 'clients']
 
 bot = Bot(token=config.BOT_TOKEN)
 invoker = None  # type: TelegramClient
-clients = []  # type: List[TelegramClient]
+clients = {}  # type: Dict[int, TelegramClient]
 
 
 def create_client(session: str):
@@ -24,4 +24,4 @@ for conf in config.CLIENTS:
         invoker = client
     conf['client'] = client
     client.conf = conf
-    clients.append(client)
+    clients[conf['uid']] = client

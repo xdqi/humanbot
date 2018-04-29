@@ -10,7 +10,6 @@ from time import sleep
 from logging import getLogger, INFO, WARNING, basicConfig
 from pdb import Pdb
 from signal import signal, SIGUSR1
-from ast import literal_eval
 from functools import wraps
 
 from telethon.errors import SessionPasswordNeededError
@@ -18,19 +17,20 @@ from telethon import events, TelegramClient
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
     InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelPrivateError
 from telethon.tl.types import MessageMediaPhoto, PhotoSize, FileLocation, \
-    PeerUser, InputUser, User, Chat, ChatFull, Channel, ChannelFull, \
-    ChatInvite
+    PeerUser, User, Chat, ChatFull, Channel, ChannelFull, ChatInvite
 from telethon.tl.functions.messages import CheckChatInviteRequest
 
 from senders import invoker
 import models
 import cache
 import config
-from models import update_user_real, update_group_real, Session
-from utils import upload_pic, ocr, get_now_timestamp, send_message_to_administrators, report_exception, \
+from models import update_user_real, update_group_real
+from utils import get_now_timestamp, send_message_to_administrators, report_exception, \
     peer_to_internal_id, test_and_join_public_channel, need_to_be_online
 import httpd
 import realbot
+import workers
+
 
 logger = getLogger(__name__)
 
@@ -81,72 +81,6 @@ def find_link_to_join(session, msg: str):
             )
 
 
-class WorkProperties(type):
-    def __new__(mcs, class_name, class_bases, class_dict):
-        name = class_dict['name']
-        new_class_dict = class_dict.copy()
-        new_class_dict['status'] = cache.RedisDict(name + '_worker_status')
-        new_class_dict['queue'] = cache.RedisQueue(name + '_queue')
-        return type.__new__(mcs, class_name, class_bases, new_class_dict)
-
-
-class Worker(Thread, metaclass=WorkProperties):
-    name = ''
-    status = None  # type: cache.RedisDict
-    queue = None  # type: cache.RedisQueue
-
-    def __init__(self):
-        super().__init__(name=self.name)
-
-    def run(self):
-        session = Session()
-
-        while True:
-            try:
-                message = self.queue.get()  # type: str
-                if message is None:
-                    sleep(0.01)
-                    continue
-                self.handler(session, message)
-                session.commit()
-                self.queue.task_done()
-                self.status['last'] = get_now_timestamp()
-                self.status['size'] = self.queue.qsize()
-            except KeyboardInterrupt:
-                break
-            except:
-                report_exception()
-                session.rollback()
-                self.queue.put(message)
-
-        session.close()
-        Session.remove()
-
-    def handler(self, session, message):
-        raise NotImplementedError
-
-
-class MessageInsertWorker(Worker):
-    name = 'insert'
-
-    def handler(self, session, message: str):
-        chat = models.ChatNew(**literal_eval(message))
-        session.add(chat)
-
-
-class MessageMarkWorker(Worker):
-    name = 'mark'
-
-    def handler(self, session, message: str):
-        request_changes = literal_eval(message)  # {'chat_id': 114, 'message_id': 514}
-        session.query(models.ChatNew).filter(
-            models.ChatNew.chat_id == request_changes['chat_id'],
-            models.ChatNew.message_id == request_changes['message_id']
-        ).update({
-            models.ChatNew.flag: models.ChatNew.flag.op('|')(models.ChatFlag.deleted)
-        }, synchronize_session='fetch')
-
-
 def threads_handler(bot, update, text):
     global thread_called_count
     return str(thread_called_count)
@@ -161,35 +95,12 @@ def statistics_handler(bot, update, text):
             )
 
 
-def workers_handler(bot, update, text):
-    insert_last = int(MessageInsertWorker.status['last'])
-    insert_size = MessageInsertWorker.queue.qsize()
-    find_link_last = int(FindLinkWorker.status['last'])
-    find_link_size = FindLinkWorker.queue.qsize()
-    mark_last = int(MessageMarkWorker.status['last'])
-    mark_size = MessageMarkWorker.queue.qsize()
-    return 'Input Message Worker: {} seconds ago, size {}\n' \
-           'Mark Worker: {} seconds ago, size {}\n' \
-           'Find Link Worker: {} seconds ago, size {}\n'.format(
-                get_now_timestamp() - insert_last, insert_size,
-                get_now_timestamp() - mark_last, mark_size,
-                get_now_timestamp() - find_link_last, find_link_size
-            )
-
-
-class FindLinkWorker(Worker):
-    name = 'find_link'
-
-    def handler(self, session, message):
-        find_link_to_join(session, message)
-
-
 def find_link_enqueue(msg: str):
-    if FindLinkWorker.queue.qsize() > 50:
+    if workers.FindLinkWorker.queue.qsize() > 50:
         send_message_to_administrators('Find link queue full, worker dead?')
-        FindLinkWorker().start()
+        workers.FindLinkWorker().start()
     else:
-        FindLinkWorker.queue.put(msg)
+        workers.FindLinkWorker.queue.put(msg)
 
 
 def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=models.ChatFlag.new, find_link=True):
@@ -204,7 +115,7 @@ def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datet
                 date=utc_timestamp,
                 flag=flag)
 
-    MessageInsertWorker.queue.put(repr(chat))
+    workers.MessageInsertWorker.queue.put(repr(chat))
 
     if not find_link:
         return
@@ -249,35 +160,20 @@ def update_group(client, chat_id: int, title: str = None):
         update_group_real(client.conf['uid'], peer_to_internal_id(chat_id), title or group.title, group.username)
 
 
-def download_file(client, media: MessageMediaPhoto):
-    # download from telegram server
-    buffer = BytesIO()
-    client.download_media(media, buffer)
-    buffer.seek(0)
-    logger.info('pic downloaded')
-
-    # calculate path
+def get_photo_address(client: TelegramClient, media: MessageMediaPhoto):
+    # get largest photo
     original = media.photo.sizes[-1]  # type: PhotoSize
     location = original.location  # type: FileLocation
     now = datetime.now()
-    path = '{}/{}'.format(now.year, now.month)
-    filename = '{}-{}_{}_{}.jpg'.format(get_now_timestamp(),
-                                        location.dc_id,
-                                        location.volume_id,
-                                        location.local_id)
-
-    return buffer, path, filename
-
-
-def download_upload_ocr(client, media: MessageMediaPhoto):
-    try:
-        buffer, path, filename = download_file(client, media)
-    except (ValueError, RuntimeError, OSError, AttributeError):
-        report_exception()
-        return 'tgpic://download-failed'
-
-    fullpath = upload_pic(buffer, path, filename)
-    return ocr(fullpath)
+    return repr(dict(
+        location=location.to_dict(),
+        client=client.get_me(input_peer=True).user_id,
+        path='{}/{}'.format(now.year, now.month),
+        filename='{}-{}_{}_{}.jpg'.format(get_now_timestamp(),
+                                          location.dc_id,
+                                          location.volume_id,
+                                          location.local_id)
+    ))
 
 
 thread_called_count = cache.RedisDict('thread_called_count')
@@ -327,8 +223,8 @@ def update_new_message_handler(event: events.NewMessage.Event):
         flag = models.ChatFlag.edited
 
     if event.photo:
-        result = download_upload_ocr(event.client, event.media)
-        text = result + '\n' + event.text
+        result = get_photo_address(event.client, event.media)
+        text = config.OCR_HINT + '\n' + result + '\n' + event.text
 
     insert_message_local_timezone(event.chat_id, event.message.id, event.sender_id, text, event.message.date, flag)
     find_link_enqueue(event.raw_text)
@@ -365,7 +261,7 @@ def update_deleted_message_handler(event: events.MessageDeleted.Event):
         logger.error('got a deleted event with chat_id None and message_id %r', event.deleted_ids)
         return
     for message_id in event.deleted_ids:
-        MessageMarkWorker.queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
+        workers.MessageMarkWorker.queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
     update_group(event.client, event.chat_id)
 
 
@@ -404,9 +300,10 @@ def main():
 
     # launching bot and workers
     realbot.main()
-    FindLinkWorker().start()
-    MessageInsertWorker().start()
-    MessageMarkWorker().start()
+    workers.FindLinkWorker().start()
+    workers.MessageInsertWorker().start()
+    workers.MessageMarkWorker().start()
+    workers.OcrWorker().start(4)
     Thread(target=httpd.main, name='httpd').start()
 
     # for debugging
