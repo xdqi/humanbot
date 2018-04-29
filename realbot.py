@@ -90,6 +90,7 @@ def bot_handler(updater: Updater):
         logger.debug('Received Update with ID %d on Webhook' % update.update_id)
 
         updater.update_queue.put(update)
+        return ''
     else:
         flask.abort(403)
 
@@ -104,7 +105,7 @@ def main():
         # set up message handlers
         dispatcher = updater.dispatcher
         Thread(target=dispatcher.start, name='dispatcher-' + conf['name']).start()
-        httpd.app.add_url_rule(conf['path'], conf['name'], methods=['POST'])
+        httpd.app.add_url_rule(conf['path'], conf['name'], lambda: bot_handler(updater), methods=['POST'])
         senders.clients[conf['uid']] = updater.bot
 
         # admin bot only
