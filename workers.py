@@ -3,19 +3,21 @@ from io import BytesIO
 from threading import Thread
 from time import sleep
 import traceback
+from logging import getLogger
 
 from telethon import TelegramClient
-from telethon.tl.types import InputFileLocation
+from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
+from telethon.extensions import markdown
 from telethon.errors.rpc_error_list import AuthKeyUnregisteredError
 from telegram import Bot
 
 import cache
 import config
 import models
-from humanbot import logger, find_link_to_join
-from models import Session
 from senders import clients
-from utils import get_now_timestamp, report_exception, upload_pic, ocr
+from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address
+
+logger = getLogger(__name__)
 
 
 class WorkProperties(type):
@@ -36,7 +38,7 @@ class Worker(Thread, metaclass=WorkProperties):
         super().__init__(name=self.name)
 
     def run(self):
-        session = Session()
+        session = models.Session()
 
         while True:
             try:
@@ -58,14 +60,14 @@ class Worker(Thread, metaclass=WorkProperties):
                 self.queue.put(message)
 
         session.close()
-        Session.remove()
+        models.Session.remove()
 
     def start(self, count: int=1):
         if count > 1:
             type(self)().start(count - 1)
         super().start()
 
-    def handler(self, session, message):
+    def handler(self, session, message: str):
         raise NotImplementedError
 
 
@@ -137,7 +139,59 @@ class FindLinkWorker(Worker):
     name = 'find_link'
 
     def handler(self, session, message):
+        from discover import find_link_to_join
         find_link_to_join(session, message)
+
+
+class FetchHistoryWorker(Worker):
+    name = 'history'
+
+    def handler(self, session, message: str):
+        info = literal_eval(message)
+        gid = info['gid']
+
+        record = session.query(
+            models.Group.gid, models.Group.master, models.func.min(models.ChatNew.message_id)
+        ).filter(
+            models.Group.gid == gid, models.Group.gid == models.ChatNew.chat_id
+        ).group_by(models.Group.gid).one_or_none()
+
+        if not record:
+            logger.warning('No message id detected or group not joined ever before')
+            return
+        gid_, master, first = record
+        client = clients[master]
+
+        if isinstance(client, Bot):
+            logger.warning('Group is managed by a bot, cannot fetch information')
+            return
+
+        for msg in client.iter_messages(entity=gid,
+                                        limit=None,
+                                        offset_id=first,
+                                        max_id=first,
+                                        ):  # type: Message
+            if isinstance(msg, MessageService):
+                continue
+            text = markdown.unparse(msg.message, msg.entities)
+
+            if isinstance(msg.media, MessageMediaPhoto):
+                result = get_photo_address(client, msg.media)
+                text = config.OCR_HISTORY_HINT + '\n' + result + '\n' + text
+
+            models.insert_message_local_timezone(gid, msg.id, msg.from_id, text, msg.date)
+            if msg.sender:  # type: User
+                models.update_user_real(msg.sender.id,
+                                        msg.sender.first_name,
+                                        msg.sender.last_name,
+                                        msg.sender.username,
+                                        msg.sender.lang_code)
+            if isinstance(msg.fwd_from, User):
+                models.update_user_real(msg.fwd_from.id,
+                                        msg.fwd_from.first_name,
+                                        msg.fwd_from.last_name,
+                                        msg.fwd_from.username,
+                                        msg.fwd_from.lang_code)
 
 
 def workers_handler(bot, update, text):

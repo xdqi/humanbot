@@ -16,9 +16,8 @@ import workers
 import senders
 from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp
 import cache
-from models import update_user_real, update_group_real
+from models import update_user_real, update_group_real, insert_message, ChatFlag
 import admin
-import models
 import httpd
 import humanbot
 
@@ -42,10 +41,10 @@ def update_group(bot: Bot, chat_id: int):
 def message(bot: Bot, update: Update):
     if hasattr(update, 'message'):
         msg = update.message  # type: Message
-        flag = models.ChatFlag.new
+        flag = ChatFlag.new
     else:
         msg = update.edited_message  # type: Message
-        flag = models.ChatFlag.edited
+        flag = ChatFlag.edited
 
     user = msg.from_user  # type: User
     text = msg.text
@@ -64,7 +63,7 @@ def message(bot: Bot, update: Update):
 
         text = config.OCR_HINT + '\n' + info + '\n' + text
 
-    humanbot.insert_message(msg.chat_id, msg.message_id, user.id, text, msg.date, flag)
+    insert_message(msg.chat_id, msg.message_id, user.id, text, msg.date, flag)
     update_user(user)
     update_group(bot, msg.chat_id)
 

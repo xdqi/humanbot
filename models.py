@@ -1,5 +1,6 @@
+from datetime import datetime, timezone
 from logging import getLogger
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Index, \
     Integer, BigInteger, SmallInteger, String, Text
@@ -186,6 +187,32 @@ def update_group_real(master_uid, chat_id, name, link):
         session.rollback()
     session.close()
     Session.remove()
+
+
+def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=ChatFlag.new, find_link=True):
+    from discover import find_link_enqueue
+    from workers import MessageInsertWorker
+    if not msg:  # Not text message
+        return
+    utc_timestamp = int(date.timestamp())
+
+    chat = dict(chat_id=chat_id,
+                message_id=message_id,
+                user_id=user_id,
+                text=msg,
+                date=utc_timestamp,
+                flag=flag)
+
+    MessageInsertWorker.queue.put(repr(chat))
+
+    if not find_link:
+        return
+    find_link_enqueue(msg)
+
+
+def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=ChatFlag.new):
+    utc_date = date.replace(tzinfo=timezone.utc)
+    insert_message(chat_id, message_id, user_id, msg, utc_date, flag, find_link=False)
 
 
 if __name__ == '__main__':
