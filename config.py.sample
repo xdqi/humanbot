@@ -63,6 +63,9 @@ OCR_HISTORY_HINT = '--OCR-OLD-HINT--'
 OCR_URL = 'http://typ-style-ocr-server-url/http/picture-server-http-url'
 RAVEN_DSN = 'https://user:pass@sentry.io/id'
 
+ONLINE_HOUR = 10
+OFFLINE_HOUR = 20
+
 DB_CONFIG = {
     'sqlalchemy.url': 'sqlite:///output.db'
     # 'sqlalchemy.url': 'mysql://user:pass@db.example.com/db' # if you prefer MySQL
