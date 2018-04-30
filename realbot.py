@@ -14,7 +14,7 @@ import flask
 import config
 import workers
 import senders
-from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp
+from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp, send_message_to_administrators
 import cache
 from models import update_user_real, update_group_real, insert_message, ChatFlag
 import admin
@@ -78,6 +78,7 @@ def error_handler(bot: Bot, update: Update, error: Exception):
     except:
         report_exception()
         logger.error('Exception raised on PID %s %s', getpid(), current_thread())
+        send_message_to_administrators('Exception raised on PID %s %s\n %s'.format(getpid(), current_thread(), traceback.format_exc()))
         traceback.print_exc()
 
 
@@ -95,18 +96,28 @@ def bot_handler(updater: Updater):
         flask.abort(403)
 
 
+class MyUpdater(Updater):
+    def _start_webhook(self, listen, port, url_path, cert, key, bootstrap_retries, clean,
+                       webhook_url, allowed_updates):
+        self.logger.debug('Updater thread started (webhook)')
+        httpd.app.add_url_rule(url_path, url_path, lambda: bot_handler(self), methods=['POST'])
+
+    def _stop_httpd(self):
+        pass
+
+
 def main():
     logger.setLevel(INFO)
     Bot.delete_webhook = lambda self: True
 
     for conf in config.BOTS:
-        updater = Updater(token=conf['token'])
+        updater = MyUpdater(token=conf['token'])
+        updater.start_webhook(url_path=conf['path'])
 
         # set up message handlers
         dispatcher = updater.dispatcher
-        Thread(target=dispatcher.start, name='dispatcher-' + conf['name']).start()
-        httpd.app.add_url_rule(conf['path'], conf['name'], lambda: bot_handler(updater), methods=['POST'])
         senders.clients[conf['uid']] = updater.bot
+        senders.bots[conf['uid']] = updater
 
         # admin bot only
         if conf['token'] == config.BOT_TOKEN:

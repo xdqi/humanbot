@@ -148,7 +148,6 @@ class AdminCommandHandler(BasicAdminCommandHandler):
     def wrapper(self, bot: Bot, update: Update):
         message = update.message  # type: Message
         text = message.text[1 + len(self.command[0]):].strip()  # command is an array after CommandHandler
-        from_user = message.from_user  # type: User
         result = self.real_callback(bot, update, text)
         if result:  # we allows no message
             bot.send_message(chat_id=message.chat_id,

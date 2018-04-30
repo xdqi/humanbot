@@ -8,6 +8,7 @@ __all__ = ['bot', 'invoker', 'clients']
 bot = Bot(token=config.BOT_TOKEN)
 invoker = None  # type: TelegramClient
 clients = {}  # type: Dict[int, TelegramClient]
+bots = {}
 
 
 def create_client(session: str):
