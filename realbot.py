@@ -14,7 +14,7 @@ import flask
 import config
 import workers
 import senders
-from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp, send_message_to_administrators
+from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp, send_to_admin_channel
 import cache
 from models import update_user_real, update_group_real, insert_message, ChatFlag
 import admin
@@ -78,7 +78,7 @@ def error_handler(bot: Bot, update: Update, error: Exception):
     except:
         report_exception()
         logger.error('Exception raised on PID %s %s', getpid(), current_thread())
-        send_message_to_administrators('Exception raised on PID %s %s\n %s'.format(getpid(), current_thread(), traceback.format_exc()))
+        send_to_admin_channel('Exception raised on PID %s %s\n %s'.format(getpid(), current_thread(), traceback.format_exc()))
         traceback.print_exc()
 
 

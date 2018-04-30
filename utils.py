@@ -94,9 +94,9 @@ def tg_html_entity(s: str) -> str:
     return s
 
 
-def send_message_to_administrators(msg: str):
+def send_to(chat: int, msg: str, strip: bool=True):
     logger.info('Sending to administrators: \n%s', msg)
-    if len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
+    if strip and len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
         buffer = BytesIO(msg.encode('utf-8'))
         now = datetime.now()
         date = now.strftime('%y/%m/%d')
@@ -114,12 +114,20 @@ def send_message_to_administrators(msg: str):
             datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
     try:
-        senders.bot.send_message(chat_id=config.ADMIN_CHANNEL,
+        senders.bot.send_message(chat_id=chat,
                                  text=msg.strip(),
                                  parse_mode='HTML',
                                  disable_web_page_preview=False)
     except TelegramError:
         report_exception()
+
+
+def send_to_admin_channel(msg: str):
+    send_to(config.ADMIN_CHANNEL, msg)
+
+
+def send_to_admin_group(msg: str):
+    send_to(config.ADMIN_GROUP, msg)
 
 
 def report_exception():

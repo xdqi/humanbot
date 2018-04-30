@@ -52,6 +52,6 @@ def dialogs_handler(bot: Bot, update: Update, text: str):
         for dialog in client.get_dialogs():
             result += f'UPDATE groups SET master = {uid} WHERE gid = {dialog.id};\n'
     result += '-- Generation complete\n'
-    utils.send_message_to_administrators(result)
+    utils.send_to_admin_channel(result)
 
     return 'Generation complete'

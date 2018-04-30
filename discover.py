@@ -16,7 +16,7 @@ import cache
 import config
 import models
 import senders
-from utils import report_exception, send_message_to_administrators, \
+from utils import report_exception, send_to_admin_channel, \
     get_now_timestamp
 
 logger = getLogger(__name__)
@@ -59,7 +59,7 @@ def find_link_to_join(session, msg: str):
             logger.warning('Unable to resolve now, %r', e)
             continue
         if isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
-            send_message_to_administrators('invitation from {}: {}, {} members\n'
+            send_to_admin_channel('invitation from {}: {}, {} members\n'
                                            'Join {} with /joinprv {}'.format(
                     link, group.title, group.participants_count, 'channel' if group.broadcast else 'group', link[-22:]
                 )
@@ -102,7 +102,7 @@ def is_chinese_group(group, info):
     chinese_count = sum(is_chinese_message(m.message) > 0 if hasattr(m, 'message') else False for m in result.messages)
     all_count = len(result.messages)
 
-    send_message_to_administrators(
+    send_to_admin_channel(
         f'''Quick Message Analysis for Group {info.title} (@{info.username})
 Message Count: {all_count}, Chinese detected: {chinese_count}
 Messages: {[m.message if hasattr(m, 'message') else '' for m in result.messages]}
@@ -156,9 +156,9 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                 except ChannelsTooMuchError:
                     logger.error('Too many groups! It\'s time to sign up for a new account')
                     return gid, False
-                send_message_to_administrators(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
+                send_to_admin_channel(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
                                                f'members: {count}\n'
-                                               )
+                                      )
                 joined = True
 
             try:
@@ -176,7 +176,7 @@ def test_and_join_public_channel(session, link) -> (int, bool):
 def find_link_enqueue(msg: str):
     from workers import FindLinkWorker
     if FindLinkWorker.queue.qsize() > 50:
-        send_message_to_administrators('Find link queue full, worker dead?')
+        send_to_admin_channel('Find link queue full, worker dead?')
         FindLinkWorker().start()
     else:
         FindLinkWorker.queue.put(msg)

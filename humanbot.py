@@ -19,7 +19,7 @@ from telethon.tl.types import PeerUser, User, Chat, ChatFull, Channel, ChannelFu
 import cache
 import config
 from models import update_user_real, update_group_real, insert_message_local_timezone, ChatFlag
-from utils import get_now_timestamp, send_message_to_administrators, report_exception, \
+from utils import get_now_timestamp, send_to_admin_channel, report_exception, \
     peer_to_internal_id, need_to_be_online, get_photo_address
 import httpd
 import realbot
@@ -105,7 +105,7 @@ def update_handler_wrapper(func):
 
             logger.error(info + exc)
             if send_to_admin:  # exception that should be send to administrator
-                send_message_to_administrators(info + exc)
+                send_to_admin_channel(info + exc)
 
             process_end_time = datetime.now()
             process_time = process_end_time - process_start_time
@@ -145,7 +145,7 @@ def update_chat_action_handler(event: events.ChatAction.Event):
     if event.user_kicked and event.user_id in [conf['uid'] for conf in config.CLIENTS]:
         msg = f'I, {event.client.conf["name"]}, was kicked by {event.kicked_by.username} (uid {event.kicked_by.id})'
         logger.warning(msg)
-        send_message_to_administrators(msg)
+        send_to_admin_channel(msg)
     else:
         try:
             update_group(event.client, event.chat_id)
@@ -154,7 +154,7 @@ def update_chat_action_handler(event: events.ChatAction.Event):
                   f' {event.kicked_by.username} (uid {event.kicked_by.id})'
             msg += traceback.format_exc()
             logger.warning(msg)
-            send_message_to_administrators(msg)
+            send_to_admin_channel(msg)
 
 @update_handler_wrapper
 def update_deleted_message_handler(event: events.MessageDeleted.Event):

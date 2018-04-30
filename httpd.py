@@ -17,7 +17,7 @@ def record():
     sender = request.values.get('From', '<unknown number>')
     me = request.values.get('To', '<unknown number>')
     logger.warning(f'Recorded from {sender} to {me}.')
-    utils.send_message_to_administrators(f'Recorded voice from {sender} to {me}.')
+    utils.send_to_admin_channel(f'Recorded voice from {sender} to {me}.')
 
     response = VoiceResponse()
     response.record()
@@ -32,7 +32,7 @@ def sms():
     body = request.values.get('Body', '<unknown message>')
 
     logger.warning(f'Received SMS from {sender} to {me}: \n{body}')
-    utils.send_message_to_administrators(f'Received SMS from {sender} to {me}: \n{body}')
+    utils.send_to_admin_channel(f'Received SMS from {sender} to {me}: \n{body}')
     return str(MessagingResponse())
 
 
