@@ -140,6 +140,19 @@ class OcrWorker(Worker):
         record.text = result + '\n' + text
 
 
+class EntityUpdateWorker(Worker):
+    name = 'entity'
+
+    def handler(self, session, message: str):
+        info = literal_eval(message)
+        entity_type = info['type']
+        del info['type']
+        if entity_type == 'user':
+            models.update_user(session=session, **info)
+        if entity_type == 'group':
+            models.update_group(session=session, **info)
+
+
 class FindLinkWorker(Worker):
     name = 'find_link'
 
@@ -220,4 +233,5 @@ def workers_handler(bot, update, text):
            MessageMarkWorker.stat() + \
            FindLinkWorker.stat() + \
            OcrWorker.stat() + \
+           EntityUpdateWorker.stat() + \
            FetchHistoryWorker.stat()

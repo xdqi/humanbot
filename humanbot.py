@@ -202,7 +202,8 @@ def main():
     # launching bot and workers
     realbot.main()
     workers.FindLinkWorker().start()
-    workers.MessageInsertWorker().start()
+    workers.MessageInsertWorker().start(4)
+    workers.EntityUpdateWorker().start()
     workers.MessageMarkWorker().start()
     workers.FetchHistoryWorker().start()
     workers.OcrWorker().start(4)

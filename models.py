@@ -100,9 +100,20 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     :param lang_code: Optional
     :return:
     """
+    from workers import EntityUpdateWorker
+    EntityUpdateWorker.queue.put(repr(dict(
+        type='user',
+        user_id=user_id,
+        first_name=first_name,
+        last_name=last_name,
+        username=username,
+        lang_code=lang_code
+    )))
+
+
+def update_user(session, user_id, first_name, last_name, username, lang_code):
     logger.debug('User %s %s %s %s %s', user_id, first_name, last_name, username, lang_code)
 
-    session = Session()
     user = session.query(User).filter(User.uid == user_id).one_or_none()
     if not user:  # new user
         user = User(uid=user_id,
@@ -136,12 +147,6 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
                                      date=utils.get_now_timestamp()
                                      )
             session.add(change)
-    try:
-        session.commit()
-    except:  # PRIMARY KEY CONSTRAINT
-        session.rollback()
-    session.close()
-    Session.remove()
 
 
 def update_group_real(master_uid, chat_id, name, link):
@@ -154,9 +159,19 @@ def update_group_real(master_uid, chat_id, name, link):
     :param link: Group Public Username (supergroup only)
     :return:
     """
+    from workers import EntityUpdateWorker
+    EntityUpdateWorker.queue.put(repr(dict(
+        type='group',
+        master_uid=master_uid,
+        chat_id=chat_id,
+        name=name,
+        link=link
+    )))
+
+
+def update_group(session, master_uid, chat_id, name, link):
     logger.debug('group %s %s %s', chat_id, name, link)
 
-    session = Session()
     group = session.query(Group).filter(Group.gid == chat_id).one_or_none()
     if not group:  # new group
         group = Group(gid=chat_id, name=name, link=link, master=master_uid)
@@ -181,12 +196,6 @@ def update_group_real(master_uid, chat_id, name, link):
                                   date=utils.get_now_timestamp()
                                   )
             session.add(change)
-    try:
-        session.commit()
-    except:  # PRIMARY KEY CONSTRAINT
-        session.rollback()
-    session.close()
-    Session.remove()
 
 
 def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=ChatFlag.new, find_link=True):
