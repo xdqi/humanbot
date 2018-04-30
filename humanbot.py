@@ -150,8 +150,15 @@ def update_chat_action_handler(event: events.ChatAction.Event):
         try:
             update_group(event.client, event.chat_id)
         except ChannelPrivateError as e:
-            msg = f'{event.user.username} (uid {event.user.id}) was kicked by' \
-                  f' {event.kicked_by.username} (uid {event.kicked_by.id})'
+            msg = ''
+            if event.user:
+                msg += f'{event.user.username} (uid {event.user.id}) was kicked by'
+            if event.kicked_by:
+                msg += f' {event.kicked_by.username} (uid {event.kicked_by.id})'
+            if event.chat:
+                msg += f'in chat {event.chat.title}'
+            if hasattr(event.chat, 'username'):
+                msg += f'({event.chat.username})'
             msg += traceback.format_exc()
             logger.warning(msg)
             send_to_admin_channel(msg)
