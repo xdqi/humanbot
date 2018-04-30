@@ -72,7 +72,7 @@ class Worker(Thread, metaclass=WorkProperties):
 
     @classmethod
     def stat(cls):
-        return '{} Worker: {} seconds ago, size {}\n'.format(
+        return '{} worker: {} seconds ago, size {}\n'.format(
             cls.name, get_now_timestamp() - int(cls.status['last']), cls.queue.qsize())
 
 
@@ -198,10 +198,21 @@ class FetchHistoryWorker(Worker):
                                         msg.fwd_from.username,
                                         msg.fwd_from.lang_code)
 
+            self.status['last'] = get_now_timestamp()
+            self.status['gid'] = gid
+            self.status['message_id'] = msg.id
+
+    @classmethod
+    def stat(cls):
+        basic = super().stat()
+        return basic + f'Group ID: {cls.status["gid"]}\n' \
+                       f'Message ID: {cls.status["message_id"]}\n'
+
 
 def history_add_handler(bot, update, text):
-    FetchHistoryWorker.queue.put(text)
-    return 'Added {} into history fetching queue'.format(text)
+    content = repr(dict(gid=int(text)))
+    FetchHistoryWorker.queue.put(content)
+    return 'Added <pre>{}</pre> into history fetching queue'.format(content)
 
 
 def workers_handler(bot, update, text):
