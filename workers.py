@@ -83,8 +83,8 @@ class MessageInsertWorker(Worker):
         chat = models.ChatNew(**literal_eval(message))
         session.add(chat)
         session.commit()
-        session.refresh(chat)
         if chat.text.startswith(config.OCR_HINT):
+            session.refresh(chat)
             OcrWorker.queue.put(str(chat.id))
 
 
