@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from logging import getLogger
+
 from sqlalchemy import engine_from_config, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Index, \
@@ -101,13 +102,15 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     :return:
     """
     from workers import EntityUpdateWorker
-    EntityUpdateWorker.queue.put(repr(dict(
+    EntityUpdateWorker.queue.put(utils.to_json(dict(
         type='user',
-        user_id=user_id,
-        first_name=first_name,
-        last_name=last_name,
-        username=username,
-        lang_code=lang_code
+        user=dict(
+            user_id=user_id,
+            first_name=first_name,
+            last_name=last_name,
+            username=username,
+            lang_code=lang_code
+        )
     )))
 
 
@@ -160,12 +163,14 @@ def update_group_real(master_uid, chat_id, name, link):
     :return:
     """
     from workers import EntityUpdateWorker
-    EntityUpdateWorker.queue.put(repr(dict(
+    EntityUpdateWorker.queue.put(utils.to_json(dict(
         type='group',
-        master_uid=master_uid,
-        chat_id=chat_id,
-        name=name,
-        link=link
+        group=dict(
+            master_uid=master_uid,
+            chat_id=chat_id,
+            name=name,
+            link=link
+        )
     )))
 
 
@@ -212,7 +217,7 @@ def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datet
                 date=utc_timestamp,
                 flag=flag)
 
-    MessageInsertWorker.queue.put(repr(chat))
+    MessageInsertWorker.queue.put(utils.to_json(chat))
 
     if not find_link:
         return

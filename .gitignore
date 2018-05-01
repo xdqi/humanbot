@@ -9,3 +9,6 @@ __pycache__/
 .idea/
 venv/
 *.bash
+*.profile
+config.go
+workers

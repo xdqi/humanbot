@@ -1,0 +1,14 @@
+package humanbot
+
+import "github.com/go-redis/redis"
+
+const RedisOptions = &redis.Options{
+	Addr:     "localhost:6379",
+	DB:       0,
+	Password: "",
+}
+
+const MysqlUrl = "user:pass@tcp(db.example.com)/db"
+
+const OcrHint = "--OCR-HINT--"
+const OcrHistoryHint = "--OCR-OLD-HINT--"

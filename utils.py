@@ -5,6 +5,7 @@ from io import BytesIO
 from threading import current_thread
 from os import makedirs
 from random import randint
+from json import dumps as to_json, loads as from_json
 
 from requests import get, ReadTimeout
 from raven import Client as RavenClient
@@ -209,7 +210,7 @@ def get_photo_address(client: TelegramClient, media: MessageMediaPhoto):
     original = media.photo.sizes[-1]  # type: PhotoSize
     location = original.location  # type: FileLocation
     now = datetime.now()
-    return repr(dict(
+    return to_json(dict(
         location=location.to_dict(),
         client=client.get_me(input_peer=True).user_id,
         path='{}/{}'.format(now.year, now.month),

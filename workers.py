@@ -15,7 +15,7 @@ import cache
 import config
 import models
 from senders import clients
-from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address
+from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json
 
 logger = getLogger(__name__)
 
@@ -38,6 +38,7 @@ class Worker(Thread, metaclass=WorkProperties):
         super().__init__(name=self.name)
 
     def run(self):
+        logger.info('%s worker has started', self.name)
         session = models.Session()
 
         while True:
@@ -80,7 +81,7 @@ class MessageInsertWorker(Worker):
     name = 'insert'
 
     def handler(self, session, message: str):
-        chat = models.ChatNew(**literal_eval(message))
+        chat = models.ChatNew(**from_json(message))
         session.add(chat)
         session.commit()
         if chat.text.startswith(config.OCR_HINT):
@@ -92,7 +93,7 @@ class MessageMarkWorker(Worker):
     name = 'mark'
 
     def handler(self, session, message: str):
-        request_changes = literal_eval(message)  # {'chat_id': 114, 'message_id': 514}
+        request_changes = from_json(message)  # {'chat_id': 114, 'message_id': 514}
         session.query(models.ChatNew).filter(
             models.ChatNew.chat_id == request_changes['chat_id'],
             models.ChatNew.message_id == request_changes['message_id']
@@ -109,7 +110,7 @@ class OcrWorker(Worker):
         record = session.query(models.ChatNew).filter(models.ChatNew.id == record_id).one_or_none()  # type: models.ChatNew
         hint, info_text, text = record.text.split('\n', maxsplit=2)
 
-        info = literal_eval(info_text)
+        info = from_json(info_text)
         client = clients[info['client']]
         buffer = BytesIO()
 
@@ -144,13 +145,13 @@ class EntityUpdateWorker(Worker):
     name = 'entity'
 
     def handler(self, session, message: str):
-        info = literal_eval(message)
+        info = from_json(message)
         entity_type = info['type']
         del info['type']
         if entity_type == 'user':
-            models.update_user(session=session, **info)
+            models.update_user(session=session, **info['user'])
         if entity_type == 'group':
-            models.update_group(session=session, **info)
+            models.update_group(session=session, **info['group'])
 
 
 class FindLinkWorker(Worker):
@@ -165,7 +166,7 @@ class FetchHistoryWorker(Worker):
     name = 'history'
 
     def handler(self, session, message: str):
-        info = literal_eval(message)
+        info = from_json(message)
         gid = info['gid']
 
         record = session.query(
@@ -188,6 +189,7 @@ class FetchHistoryWorker(Worker):
                                         limit=None,
                                         offset_id=first,
                                         max_id=first,
+                                        wait_time=0
                                         ):  # type: Message
             if isinstance(msg, MessageService):
                 continue

@@ -1,7 +1,7 @@
 from gevent import monkey; monkey.patch_all(); del monkey
 
 import traceback
-from os import getpid
+from os import getpid, system
 from threading import current_thread, Thread
 from datetime import datetime
 from time import sleep
@@ -20,7 +20,7 @@ import cache
 import config
 from models import update_user_real, update_group_real, insert_message_local_timezone, ChatFlag
 from utils import get_now_timestamp, send_to_admin_channel, report_exception, \
-    peer_to_internal_id, need_to_be_online, get_photo_address
+    peer_to_internal_id, need_to_be_online, get_photo_address, to_json
 import session
 import senders
 import httpd
@@ -171,7 +171,7 @@ def update_deleted_message_handler(event: events.MessageDeleted.Event):
         logger.error('got a deleted event with chat_id None and message_id %r', event.deleted_ids)
         return
     for message_id in event.deleted_ids:
-        workers.MessageMarkWorker.queue.put(str(dict(chat_id=event.chat_id, message_id=message_id)))
+        workers.MessageMarkWorker.queue.put(to_json(dict(chat_id=event.chat_id, message_id=message_id)))
     update_group(event.client, event.chat_id)
 
 
@@ -215,8 +215,8 @@ def main():
     # launching bot and workers
     realbot.main()
     workers.FindLinkWorker().start()
-    workers.MessageInsertWorker().start(4)
-    workers.EntityUpdateWorker().start()
+    # workers.MessageInsertWorker().start(4)
+    # workers.EntityUpdateWorker().start()
     workers.MessageMarkWorker().start()
     workers.FetchHistoryWorker().start()
     workers.OcrWorker().start(4)
@@ -229,6 +229,7 @@ def main():
         try:
             sleep(1)
         except KeyboardInterrupt:
+            system('killall workers')
             break
 
     # cleanup

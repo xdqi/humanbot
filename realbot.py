@@ -14,7 +14,7 @@ import flask
 import config
 import workers
 import senders
-from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp, send_to_admin_channel
+from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp, send_to_admin_channel, to_json
 import cache
 from models import update_user_real, update_group_real, insert_message, ChatFlag
 import admin
@@ -54,7 +54,7 @@ def message(bot: Bot, update: Update):
         photo = max(msg.photo, key=lambda p: p.file_size)  # type: PhotoSize
         now = datetime.now()
 
-        info = repr(dict(
+        info = to_json(dict(
             client=bot.id,
             file_id=photo.file_id,
             path='{}/{}'.format(now.year, now.month),
@@ -78,7 +78,7 @@ def error_handler(bot: Bot, update: Update, error: Exception):
     except:
         report_exception()
         logger.error('Exception raised on PID %s %s', getpid(), current_thread())
-        send_to_admin_channel('Exception raised on PID %s %s\n %s'.format(getpid(), current_thread(), traceback.format_exc()))
+        send_to_admin_channel(f'Exception raised on PID {getpid()} {current_thread()}\n {traceback.format_exc()}')
         traceback.print_exc()
 
 
