@@ -213,7 +213,13 @@ def main():
         client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
 
     # launching bot and workers
-    realbot.main()
+    while True:
+        try:
+            realbot.main()
+            break
+        except:
+            traceback.print_exc()
+            pass
     workers.FindLinkWorker().start()
     # workers.MessageInsertWorker().start(4)
     # workers.EntityUpdateWorker().start()
