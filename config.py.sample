@@ -67,6 +67,14 @@ RAVEN_DSN = 'https://user:pass@sentry.io/id'
 ONLINE_HOUR = 10
 OFFLINE_HOUR = 20
 
+SESSION_USE_MYSQL = True
+MYSQL_CONFIG = {
+    'user': 'user',
+    'password': 'pass',
+    'host': 'db.example.com',
+    'db_prefix': 'session_',
+}
+
 DB_CONFIG = {
     'sqlalchemy.url': 'sqlite:///output.db'
     # 'sqlalchemy.url': 'mysql://user:pass@db.example.com/db' # if you prefer MySQL

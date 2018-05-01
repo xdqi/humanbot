@@ -19,10 +19,12 @@ def create_client(session: str):
                           update_workers=4)
 
 
-for conf in config.CLIENTS:
-    client = create_client(conf['session_name'])
-    if conf['session_name'] == config.INVOKER_SESSION_NAME:
-        invoker = client
-    conf['client'] = client
-    client.conf = conf
-    clients[conf['uid']] = client
+def create_clients():
+    global invoker
+    for conf in config.CLIENTS:
+        client = create_client(conf['session_name'])
+        if conf['session_name'] == config.INVOKER_SESSION_NAME:
+            invoker = client
+        conf['client'] = client
+        client.conf = conf
+        clients[conf['uid']] = client

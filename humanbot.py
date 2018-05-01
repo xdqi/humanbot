@@ -21,6 +21,8 @@ import config
 from models import update_user_real, update_group_real, insert_message_local_timezone, ChatFlag
 from utils import get_now_timestamp, send_to_admin_channel, report_exception, \
     peer_to_internal_id, need_to_be_online, get_photo_address
+import session
+import senders
 import httpd
 import realbot
 import workers
@@ -179,6 +181,10 @@ def main():
     basicConfig(level=INFO)
     logger.setLevel(INFO)
     getLogger('telethon').setLevel(WARNING)
+
+    if config.SESSION_USE_MYSQL:
+        session.monkey_patch_sqlite_session()
+    senders.create_clients()
 
     # launch clients
     for conf in config.CLIENTS:
