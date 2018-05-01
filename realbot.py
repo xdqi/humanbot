@@ -63,8 +63,13 @@ def message(bot: Bot, update: Update):
 
         text = config.OCR_HINT + '\n' + info + '\n' + text
 
-    insert_message(msg.chat_id, msg.message_id, user.id, text, msg.date, flag)
-    update_user(user)
+    if user:
+        uid = user.id
+        update_user(user)
+    else:
+        uid = None
+
+    insert_message(msg.chat_id, msg.message_id, uid, text, msg.date, flag)
     update_group(bot, msg.chat_id)
 
 
