@@ -48,6 +48,8 @@ def leave_group_handler(bot: Bot, update: Update, text: str):
 def dialogs_handler(bot: Bot, update: Update, text: str):
     result = ''
     for uid, client in clients.items():
+        if isinstance(client, Bot):
+            continue
         result += f'-- For client with UID {uid}\n'
         for dialog in client.get_dialogs():
             result += f'UPDATE groups SET master = {uid} WHERE gid = {dialog.id};\n'
