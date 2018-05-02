@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from telethon import TelegramClient
 from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
 from telethon.extensions import markdown
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, FloodWaitError
+from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError
 from telegram import Bot
 
 import cache
@@ -96,7 +96,16 @@ class MessageMarkWorker(Worker):
     name = 'mark'
 
     def handler(self, session, message: str):
-        request_changes = from_json(message)  # {'chat_id': 114, 'message_id': 514}
+        request_changes = from_json(message)  # type: dict # {'chat_id': 114, 'message_id': 514}
+        count = session.query(models.ChatNew).filter(
+            models.ChatNew.chat_id == request_changes['chat_id'],
+            models.ChatNew.message_id == request_changes['message_id']
+        ).count()
+        if not count:
+            request_changes['tries'] = request_changes.get('tries', 0) + 1
+            if request_changes['tries'] < 100:
+                self.queue.put(to_json(request_changes))
+
         session.query(models.ChatNew).filter(
             models.ChatNew.chat_id == request_changes['chat_id'],
             models.ChatNew.message_id == request_changes['message_id']
@@ -181,7 +190,7 @@ class FetchHistoryWorker(Worker):
         if not record:
             logger.warning('No message id detected or group not joined ever before')
             return
-        gid_, master, first = record
+        gid_, master, self.first = record
         client = clients[master]
 
         if isinstance(client, Bot):
@@ -191,32 +200,34 @@ class FetchHistoryWorker(Worker):
         profile.enable()
         while True:
             try:
-                last = self.fetch(client, gid, first)
-                if last == first:  # no new messages
+                prev = self.first
+                self.fetch(client, gid)
+                if prev == self.first:  # no new messages
                     break
-                first = last
             except FloodWaitError as e:
                 sleep(e.seconds + 1)
+            except ChannelPrivateError as e:
+                send_to_admin_channel(f'fetch worker failed: group {gid} (managed by {master}) kicked us')
+            except KeyboardInterrupt:
+                break
             except:
                 send_to_admin_channel(traceback.format_exc() + '\nfetch worker unknown exception')
 
         profile.disable()
         profile.dump_stats('normal.profile')
 
-    def fetch(self, client, gid, first):
-        last = first
+    def fetch(self, client, gid):
         for msg in client.iter_messages(entity=gid,
                                         limit=None,
-                                        offset_id=first,
-                                        max_id=first,
+                                        offset_id=self.first,
+                                        max_id=self.first,
                                         wait_time=0
                                         ):  # type: Message
-            last = msg.id
+            self.first = msg.id
             before = datetime.now().timestamp()
             self.save(client, gid, msg)
             after = datetime.now().timestamp()
             sleep(0.01 - (after - before))
-        return last
 
     def save(self, client, gid, msg: Message):
         if True:
