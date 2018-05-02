@@ -17,11 +17,28 @@ func (q RedisQueue) Get() string {
 }
 
 func (q RedisQueue) GetBytes() []byte {
-	b, _ := client.LPop(q.Name + QueuePrefix).Bytes()
+	b, err := client.LPop(q.Name + QueuePrefix).Bytes()
+	if err == redis.Nil {
+		return nil
+	}
 	return b
 }
 
+func (q RedisQueue) BulkGetBytes(count int) [][]byte {
+	var result [][]byte
+	for i := 0; i < count; i++ {
+		if b := q.GetBytes(); b != nil {
+			result = append(result, b)
+		}
+	}
+	return result
+}
+
 func (q RedisQueue) Put(value string) {
+	client.RPush(q.Name + QueuePrefix, value)
+}
+
+func (q RedisQueue) PutBytes(value []byte) {
 	client.RPush(q.Name + QueuePrefix, value)
 }
 

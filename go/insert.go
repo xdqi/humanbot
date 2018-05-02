@@ -26,27 +26,41 @@ func insertMain() {
 	log.Println("Insert worker has started")
 
 	for {
-		msg := insertQueue.GetBytes()
-		var chat ChatNew
-		json.Unmarshal(msg, &chat)
+		messages := insertQueue.BulkGetBytes(100)
 
-		if chat.ChatId == 0 {
+		if len(messages) == 0 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 
-		for {
-			if err := db.Create(&chat).Error; err != nil {
-				logger.Printf("insert message error: %v", err)
+		tx := db.Begin()
+
+		for _, msg := range messages {
+			var chat ChatNew
+			json.Unmarshal(msg, &chat)
+
+			for {
+				if err := tx.Create(&chat).Error; err != nil {
+					logger.Printf("insert message error: %v", err)
+				}
+				break
 			}
-			break
+
+			client.HSet("insert_worker_status", "last", time.Now().Unix())
+			client.HSet("insert_worker_status", "size", insertQueue.Size())
+
+			if strings.HasPrefix(chat.Text, OcrHint) {
+				ocrQueue.Put(strconv.Itoa(int(chat.ID)))
+			}
 		}
 
-		client.HSet("insert_worker_status", "last", time.Now().Unix())
-		client.HSet("insert_worker_status", "size", insertQueue.Size())
+		if err := tx.Commit().Error; err != nil {
+			tx.Rollback()
+			for _, msg := range messages {
+				insertQueue.PutBytes(msg)
+			}
 
-		if strings.HasPrefix(chat.Text, OcrHint) {
-			ocrQueue.Put(strconv.Itoa(int(chat.ID)))
+			logger.Printf("insert commit error: %v", err)
 		}
 	}
 }

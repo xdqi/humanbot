@@ -160,6 +160,12 @@ func entityMain() {
 
 	for {
 		msg := entityQueue.GetBytes()
+
+		if msg == nil {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+
 		var entity EntityItem
 		json.Unmarshal(msg, &entity)
 
@@ -167,9 +173,6 @@ func entityMain() {
 			updateUser(db, &entity.User)
 		} else if entity.EntityType == "group" {
 			updateGroup(db, &entity.Group)
-		} else {
-			time.Sleep(10 * time.Millisecond)
-			continue
 		}
 
 		client.HSet("entity_worker_status", "last", time.Now().Unix())
