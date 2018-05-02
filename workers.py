@@ -4,18 +4,21 @@ from threading import Thread
 from time import sleep
 import traceback
 from logging import getLogger
+from cProfile import Profile
+from datetime import datetime, timedelta
 
 from telethon import TelegramClient
 from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
 from telethon.extensions import markdown
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError
+from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, FloodWaitError
 from telegram import Bot
 
 import cache
 import config
 import models
 from senders import clients
-from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json
+from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
+    send_to_admin_channel
 
 logger = getLogger(__name__)
 
@@ -184,15 +187,41 @@ class FetchHistoryWorker(Worker):
         if isinstance(client, Bot):
             logger.warning('Group is managed by a bot, cannot fetch information')
             return
+        profile = Profile()
+        profile.enable()
+        while True:
+            try:
+                last = self.fetch(client, gid, first)
+                if last == first:  # no new messages
+                    break
+                first = last
+            except FloodWaitError as e:
+                sleep(e.seconds + 1)
+            except:
+                send_to_admin_channel(traceback.format_exc() + '\nfetch worker unknown exception')
 
+        profile.disable()
+        profile.dump_stats('normal.profile')
+
+    def fetch(self, client, gid, first):
+        last = first
         for msg in client.iter_messages(entity=gid,
                                         limit=None,
                                         offset_id=first,
                                         max_id=first,
                                         wait_time=0
                                         ):  # type: Message
+            last = msg.id
+            before = datetime.now().timestamp()
+            self.save(client, gid, msg)
+            after = datetime.now().timestamp()
+            sleep(0.01 - (after - before))
+        return last
+
+    def save(self, client, gid, msg: Message):
+        if True:
             if isinstance(msg, MessageService):
-                continue
+                return
             text = markdown.unparse(msg.message, msg.entities)
 
             if isinstance(msg.media, MessageMediaPhoto):
@@ -225,7 +254,7 @@ class FetchHistoryWorker(Worker):
 
 
 def history_add_handler(bot, update, text):
-    content = repr(dict(gid=int(text)))
+    content = to_json(dict(gid=int(text)))
     FetchHistoryWorker.queue.put(content)
     return 'Added <pre>{}</pre> into history fetching queue'.format(content)
 
