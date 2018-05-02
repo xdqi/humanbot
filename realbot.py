@@ -42,9 +42,11 @@ def message(bot: Bot, update: Update):
     if hasattr(update, 'message'):
         msg = update.message  # type: Message
         flag = ChatFlag.new
-    else:
+    elif hasattr(update, 'edited_message'):
         msg = update.edited_message  # type: Message
         flag = ChatFlag.edited
+    else:
+        return
 
     user = msg.from_user  # type: User
     text = msg.text
