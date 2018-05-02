@@ -91,7 +91,17 @@ func updateGroup(db *gorm.DB, newGroup *Group) {
 		}
 		return
 	}
-	// user exists
+	// check master
+	if group.Master.IsZero() {
+		group.Master = newGroup.Master
+		for {
+			if err := db.Save(&group).Error; err != nil {
+				logger.Printf("save group master error: %v", err)
+			}
+			break
+		}
+	}
+	// group exists
 	same := newGroup.Name == group.Name && newGroup.Link == group.Link
 	if same {
 		// group not changed

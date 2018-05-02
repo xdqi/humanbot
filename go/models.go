@@ -43,10 +43,10 @@ func (UsernameHistory) TableName() string {
 }
 
 type Group struct {
-	GID    int64       `gorm:"column:id;primary_key"`
+	GID    int64       `gorm:"column:id;primary_key" json:"chat_id"`
 	Name   string      `gorm:"size:100"`
 	Link   null.String `gorm:"size:50"`
-	Master int
+	Master null.Int    `json:"master_uid"`
 }
 
 func (Group) TableName() string {
