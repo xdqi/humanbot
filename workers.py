@@ -202,13 +202,14 @@ class FetchHistoryWorker(Worker):
         if isinstance(client, Bot):
             logger.warning('Group is managed by a bot, cannot fetch information')
             return
-        profile = Profile()
-        profile.enable()
+        # profile = Profile()
+        # profile.enable()
         while True:
             try:
                 prev = self.first
                 self.fetch(client, gid)
                 if prev == self.first:  # no new messages
+                    FetchHistoryWorker().start()
                     break
             except FloodWaitError as e:
                 sleep(e.seconds + 1)
@@ -221,8 +222,8 @@ class FetchHistoryWorker(Worker):
             except:
                 send_to_admin_channel(traceback.format_exc() + '\nfetch worker unknown exception')
 
-        profile.disable()
-        profile.dump_stats('normal.profile')
+        # profile.disable()
+        # profile.dump_stats('normal.profile')
 
     def fetch(self, client, gid):
         for msg in client.iter_messages(entity=gid,
