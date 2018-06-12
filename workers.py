@@ -248,7 +248,7 @@ class FetchHistoryWorker(Worker):
                 text = config.OCR_HISTORY_HINT + '\n' + result + '\n' + text
 
             models.insert_message_local_timezone(gid, msg.id, msg.from_id, text, msg.date)
-            if msg.sender:  # type: User
+            if msg.input_sender is not None:  # type: User
                 models.update_user_real(msg.sender.id,
                                         msg.sender.first_name,
                                         msg.sender.last_name,
