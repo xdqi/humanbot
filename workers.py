@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 from telethon import TelegramClient
 from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
 from telethon.extensions import markdown
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError
+from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
+    RpcCallFailError
 from telegram import Bot
 
 import cache
@@ -103,8 +104,9 @@ class MessageMarkWorker(Worker):
         ).count()
         if not count:
             request_changes['tries'] = request_changes.get('tries', 0) + 1
-            if request_changes['tries'] < 100:
+            if request_changes['tries'] < 2:
                 self.queue.put(to_json(request_changes))
+            return
 
         session.query(models.ChatNew).filter(
             models.ChatNew.chat_id == request_changes['chat_id'],
@@ -120,6 +122,10 @@ class OcrWorker(Worker):
     def handler(self, session, message: str):
         record_id = int(message)
         record = session.query(models.ChatNew).filter(models.ChatNew.id == record_id).one_or_none()  # type: models.ChatNew
+
+        if record is None:
+            return
+
         hint, info_text, text = record.text.split('\n', maxsplit=2)
 
         info = from_json(info_text)
@@ -210,6 +216,8 @@ class FetchHistoryWorker(Worker):
                 send_to_admin_channel(f'fetch worker failed: group {gid} (managed by {master}) kicked us')
             except KeyboardInterrupt:
                 break
+            except RpcCallFailError:
+                continue
             except:
                 send_to_admin_channel(traceback.format_exc() + '\nfetch worker unknown exception')
 

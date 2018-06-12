@@ -55,7 +55,7 @@ func (Group) TableName() string {
 
 type GroupHistory struct {
 	ID   int         `gorm:"column:id;AUTO_INCREMENT;primary_key"`
-	GID  int64
+	GID  int64       `gorm:"column:gid"`
 	Name string      `gorm:"size:100"`
 	Link null.String `gorm:"size:50"`
 	Date int

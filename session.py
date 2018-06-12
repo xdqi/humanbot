@@ -56,7 +56,7 @@ class FakeCursor:
                 query = query.replace('primary key(md5_digest', 'primary key(md5_digest(16)')
             logger.error(query)
             if 'without rowid' in query:
-                query.replace('without rowid', '')
+                query = query.replace('without rowid', '')
 
         if '?' in query:
             query = query.replace('?', '%s')
