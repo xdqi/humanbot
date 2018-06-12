@@ -3,6 +3,8 @@ from math import ceil
 from random import sample
 from time import sleep
 from logging import getLogger
+from base64 import urlsafe_b64decode
+from struct import unpack
 
 from telegram import Bot
 from telegram.error import BadRequest, RetryAfter, TimedOut
@@ -17,9 +19,17 @@ import config
 import models
 import senders
 from utils import report_exception, send_to_admin_channel, \
-    get_now_timestamp
+    get_now_timestamp, tg_html_entity
 
 logger = getLogger(__name__)
+
+
+def extract_uid_gid_from_link(link: str):
+    link = link[-22:]
+    link_bytes = link.encode('utf-8') + b'=='
+    detail = urlsafe_b64decode(link_bytes)
+    # join chat link format: uid(u32be), gid(u32be), random(u64be)
+    return unpack('>LLQ', detail)
 
 
 PUBLIC_REGEX = re.compile(r"t(?:elegram)?\.me/([a-zA-Z][\w\d]{3,30}[a-zA-Z\d])")
@@ -47,9 +57,13 @@ def find_link_to_join(session, msg: str):
 
     for link in private_links:
         invite_hash = link[-22:]
-        if invite_hash in recent_found_links:
+        uid, gid, rand = extract_uid_gid_from_link(invite_hash)
+        if str(gid) in recent_found_links:
             continue
-        recent_found_links.add(invite_hash)
+        recent_found_links.add(str(gid))
+        group_exist = session.query(models.Group).filter(models.Group.gid == gid).one_or_none()
+        if group_exist:
+            continue
         try:
             group = senders.invoker.invoke(CheckChatInviteRequest(invite_hash))
         except (InviteHashExpiredError, InviteHashInvalidError) as e:
