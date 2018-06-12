@@ -165,10 +165,14 @@ def test_and_join_public_channel(session, link) -> (int, bool):
             if (info.title and is_chinese_message(info.title)) or \
                (info.description and is_chinese_message(info.description)) or \
                is_chinese_group(group, info):  # we do it after logging it to our system
+                global_count = cache.RedisDict('global_count')
                 try:
                     result = senders.invoker.invoke(JoinChannelRequest(group))
+                    global_count['full'] = '0'
                 except ChannelsTooMuchError:
-                    logger.error('Too many groups! It\'s time to sign up for a new account')
+                    if global_count['full'] == '0':
+                        send_to_admin_channel('Too many groups! It\'s time to sign up for a new account')
+                    global_count['full'] = '1'
                     return gid, False
                 send_to_admin_channel(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
                                                f'members: {count}\n'
