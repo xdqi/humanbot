@@ -58,6 +58,10 @@ def find_link_to_join(session, msg: str):
     for link in private_links:
         invite_hash = link[-22:]
         uid, gid, rand = extract_uid_gid_from_link(invite_hash)
+        if gid > 1000000000:  # supergroup or channel
+            gid = int('-100' + str(gid))
+        else:  # normal group
+            gid = -gid
         if str(gid) in recent_found_links:
             continue
         recent_found_links.add(str(gid))
