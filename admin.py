@@ -15,7 +15,7 @@ logger = getLogger(__name__)
 def execute_command_handler(bot: Bot, update: Update, text: str):
     logger.info('executing command %s', text)
     with popen(text) as f:
-        return '<pre>' + utils.tg_html_entity(repr((f.read())) + '</pre>')
+        return '<pre>' + utils.tg_html_entity(f.read()) + '</pre>'
 
 
 def evaluate_script_handler(bot: Bot, update: Update, text: str):
