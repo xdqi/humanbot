@@ -209,7 +209,9 @@ class FetchHistoryWorker(Worker):
                 prev = self.first
                 self.fetch(client, gid)
                 if prev == self.first:  # no new messages
-                    FetchHistoryWorker().start()
+                    threads = [t for t in __import__('threading').enumerate() if 'history' in t.name]
+                    if len(threads) == 1:
+                        FetchHistoryWorker().start()
                     break
             except FloodWaitError as e:
                 sleep(e.seconds + 1)
