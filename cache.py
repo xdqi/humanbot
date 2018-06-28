@@ -85,6 +85,9 @@ class RedisDict(RedisObject):
     def __setitem__(self, key: str, value: str):
         self.r.hset(self.name, key, value)
 
+    def __delitem__(self, key: str):
+        self.r.hdel(self.name, key)
+
     def get(self, key: str, default: str):
         val = self[key]
         if val is None:
