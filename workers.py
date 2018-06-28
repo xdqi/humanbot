@@ -57,6 +57,7 @@ class Worker(Thread, metaclass=WorkProperties):
                 self.status['last'] = get_now_timestamp()
                 self.status['size'] = self.queue.qsize()
             except KeyboardInterrupt:
+                self.queue.put(message)
                 break
             except:
                 traceback.print_exc()
@@ -188,19 +189,21 @@ class FetchHistoryWorker(Worker):
         gid = info['gid']
 
         record = session.query(
-            models.Group.gid, models.Group.master, models.func.min(models.ChatNew.message_id)
+            models.Group.gid, models.Group.master, models.Group.name, models.Group.link,
+            models.func.min(models.ChatNew.message_id)
         ).filter(
             models.Group.gid == gid, models.Group.gid == models.ChatNew.chat_id
         ).group_by(models.Group.gid).one_or_none()
 
         if not record:
-            logger.warning('No message id detected or group not joined ever before')
+            send_to_admin_channel('fetch: No message id detected or group not joined ever before for group'
+                                  f'{gid}')
             return
-        gid_, master, self.first = record
+        gid_, master, name, link, self.first = record
         client = clients[master]
 
         if isinstance(client, Bot):
-            logger.warning('Group is managed by a bot, cannot fetch information')
+            send_to_admin_channel(f'Group {name}(@{link}) is managed by a bot ({master}), cannot fetch information')
             return
         # profile = Profile()
         # profile.enable()
@@ -209,6 +212,8 @@ class FetchHistoryWorker(Worker):
                 prev = self.first
                 self.fetch(client, gid)
                 if prev == self.first:  # no new messages
+                    del self.status[gid]
+                    send_to_admin_channel(f'Group {name}(@{link}) all fetched by {master}, last message id is {prev}')
                     threads = [t for t in __import__('threading').enumerate() if 'history' in t.name]
                     if len(threads) == 1:
                         FetchHistoryWorker().start()
@@ -217,6 +222,7 @@ class FetchHistoryWorker(Worker):
                 sleep(e.seconds + 1)
             except ChannelPrivateError as e:
                 send_to_admin_channel(f'fetch worker failed: group {gid} (managed by {master}) kicked us')
+                break
             except KeyboardInterrupt:
                 break
             except RpcCallFailError:
@@ -265,14 +271,12 @@ class FetchHistoryWorker(Worker):
                                         msg.fwd_from.lang_code)
 
             self.status['last'] = get_now_timestamp()
-            self.status['gid'] = gid
-            self.status['message_id'] = msg.id
+            self.status[str(gid)] = msg.id
 
     @classmethod
     def stat(cls):
         basic = super().stat()
-        return basic + f'Group ID: {cls.status["gid"]}\n' \
-                       f'Message ID: {cls.status["message_id"]}\n'
+        return basic + repr(cls.status)
 
 
 def history_add_handler(bot, update, text):
