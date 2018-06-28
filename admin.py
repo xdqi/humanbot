@@ -25,12 +25,12 @@ def evaluate_script_handler(bot: Bot, update: Update, text: str):
 
 def join_public_group_handler(bot: Bot, update: Update, text: str):
     logger.info('joining public group %s', text)
-    output = senders.invoker.invoke(JoinChannelRequest(senders.invoker.get_entity(text)))
+    output = senders.invoker(JoinChannelRequest(senders.invoker.get_entity(text)))
     return str(output)
 
 
 def join_private_group_handler(bot: Bot, update: Update, text: str):
-    output = senders.invoker.invoke(ImportChatInviteRequest(text))
+    output = senders.invoker(ImportChatInviteRequest(text))
     return str(output)
 
 
@@ -41,7 +41,7 @@ def leave_group_handler(bot: Bot, update: Update, text: str):
         link = text
         pass
     logger.info('leaving public group %s', link)
-    output = senders.invoker.invoke(LeaveChannelRequest(senders.invoker.get_entity(link)))
+    output = senders.invoker(LeaveChannelRequest(senders.invoker.get_entity(link)))
     return str(output)
 
 

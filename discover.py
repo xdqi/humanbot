@@ -69,7 +69,7 @@ def find_link_to_join(session, msg: str):
         if group_exist:
             continue
         try:
-            group = senders.invoker.invoke(CheckChatInviteRequest(invite_hash))
+            group = senders.invoker(CheckChatInviteRequest(invite_hash))
         except (InviteHashExpiredError, InviteHashInvalidError) as e:
             report_exception()
             continue
@@ -106,7 +106,7 @@ def is_chinese_message(message: str):
 
 
 def is_chinese_group(group, info):
-    result = senders.invoker.invoke(GetHistoryRequest(
+    result = senders.invoker(GetHistoryRequest(
         peer=group,
         offset_id=0,
         offset_date=None,
@@ -171,7 +171,7 @@ def test_and_join_public_channel(session, link) -> (int, bool):
                is_chinese_group(group, info):  # we do it after logging it to our system
                 global_count = cache.RedisDict('global_count')
                 try:
-                    result = senders.invoker.invoke(JoinChannelRequest(group))
+                    result = senders.invoker(JoinChannelRequest(group))
                     global_count['full'] = '0'
                 except ChannelsTooMuchError:
                     if global_count['full'] == '0':

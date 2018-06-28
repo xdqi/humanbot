@@ -1,4 +1,4 @@
-telethon
+telethon-sync
 cryptg
 python-telegram-bot
 

@@ -15,8 +15,7 @@ def create_client(session: str):
     return TelegramClient(session=session,
                           api_id=config.TG_API_ID,
                           api_hash=config.TG_API_HASH,
-                          proxy=None,
-                          update_workers=4)
+                          proxy=None)
 
 
 def create_clients():

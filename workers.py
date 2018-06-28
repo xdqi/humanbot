@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from telethon import TelegramClient
 from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
 from telethon.extensions import markdown
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
+from telethon.errors import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
     RpcCallFailError
 from telegram import Bot
 

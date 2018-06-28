@@ -12,7 +12,7 @@ from functools import wraps
 
 from telethon.errors import SessionPasswordNeededError
 from telethon import events, TelegramClient
-from telethon.errors.rpc_error_list import AuthKeyUnregisteredError, PeerIdInvalidError, \
+from telethon.errors import AuthKeyUnregisteredError, PeerIdInvalidError, \
     ChannelPrivateError
 from telethon.tl.types import PeerUser, User, Chat, ChatFull, Channel, ChannelFull
 
