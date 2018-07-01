@@ -198,7 +198,7 @@ async def get_photo_address(client: TelegramClient, media: MessageMediaPhoto):
 
 
 def block(c):
-    asyncio.get_event_loop().run_until_complete(c)
+    return asyncio.get_event_loop().run_until_complete(c)
 
 
 def noblock(c):
