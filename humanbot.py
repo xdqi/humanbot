@@ -79,14 +79,11 @@ async def update_group(client, chat_id: int, title: str = None):
 
 thread_called_count = cache.RedisDict('thread_called_count')
 global_count = cache.RedisDict('global_count')
-global_count['received_message'] = 0
-global_count['total_used_time'] = 0
-global_count['start_time'] = get_now_timestamp()
-async def update_handler_wrapper(func):
+def update_handler_wrapper(func):
     @wraps(func)
     async def wrapped(event):
         prev_num = int(await thread_called_count.get(current_thread().name, 0))
-        thread_called_count[current_thread().name] = prev_num + 1
+        await thread_called_count.set(current_thread().name, prev_num + 1)
         process_start_time = datetime.now()
         try:
             await func(event)
@@ -186,6 +183,11 @@ async def main():
     if config.SESSION_USE_MYSQL:
         session.monkey_patch_sqlite_session()
     senders.create_clients()
+
+    await cache.RedisObject.init()
+    await global_count.set('received_message', 0)
+    await global_count.set('total_used_time', 0)
+    await global_count.set('start_time', get_now_timestamp())
 
     # launch clients
     for conf in config.CLIENTS:

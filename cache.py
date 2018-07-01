@@ -3,18 +3,15 @@ import config
 import utils
 
 
-class RedisProperties(type):
-    def __new__(mcs, class_name, class_bases, class_dict):
-        new_class_dict = class_dict.copy()
-        new_class_dict['r'] = utils.block(aioredis.create_redis_pool(address=config.REDIS_URL, minsize=1, maxsize=20))
-        return type.__new__(mcs, class_name, class_bases, new_class_dict)
-
-
-class RedisObject(metaclass=RedisProperties):
+class RedisObject:
     r = None  # type: aioredis.Redis
 
     def __init__(self):
         pass
+
+    @classmethod
+    async def init(cls):
+        cls.r = await aioredis.create_redis_pool(address=config.REDIS_URL, minsize=1, maxsize=20)
 
 
 class RedisExpiringSet(RedisObject):
@@ -102,14 +99,14 @@ class RedisDict(RedisObject):
             return
         return val.decode('utf-8')
 
-    def __getitem__(self, key: str) -> str:
-        return utils.block(self.getitem(key))
+    def __getitem__(self, key: str):
+        return self.getitem(key)
 
-    async def setitem(self, key: str, value: str):
+    async def set(self, key: str, value: str):
         await self.r.hset(self.name, key, value)
 
     def __setitem__(self, key: str, value: str):
-        utils.block(self.setitem(key, value))
+        utils.block(self.set(key, value))
 
     async def delitem(self, key: str):
         await self.r.hdel(self.name, key)

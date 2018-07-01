@@ -51,7 +51,7 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
     for link in public_links:
         if link in config.GROUP_BLACKLIST:  # false detection of private link
             continue
-        if link in recent_found_links:
+        if await recent_found_links.contains(link):
             logger.warning(f'Group @{link} is in recent found links, skip')
             continue
         await recent_found_links.add(link)
@@ -66,7 +66,7 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
             gid = int('-100' + str(gid))
         else:  # normal group
             gid = -gid
-        if str(gid) in recent_found_links:
+        if await recent_found_links.contains(str(gid)):
             continue
         await recent_found_links.add(str(gid))
 
@@ -154,7 +154,7 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         report_exception()
         if isinstance(e, RetryAfter):
             logger.warning('bot retry after %s seconds', e.timeout)
-            bot_info[fetcher._Bot__token] = get_now_timestamp() + e.timeout
+            await bot_info.set(fetcher._Bot__token, get_now_timestamp() + e.timeout)
         return None, False
 
     if info.type not in [ChatType.SUPER_GROUP, ChatType.CHANNEL]:
@@ -186,11 +186,11 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         global_count = cache.RedisDict('global_count')
         try:
             await senders.invoker(JoinChannelRequest(group))
-            global_count['full'] = '0'
+            await global_count.set('full', '0')
         except ChannelsTooMuchError:
-            if global_count['full'] == '0':
+            if await global_count['full'] == '0':
                 await send_to_admin_channel('Too many groups! It\'s time to sign up for a new account')
-            global_count['full'] = '1'
+                await global_count.set('full', '1')
             return gid, False
         await send_to_admin_channel(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
                                        f'members: {count}\n'

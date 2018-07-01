@@ -167,16 +167,17 @@ def get_random_time(hour):
     return int(time.timestamp())
 
 
-def need_to_be_online():
+async def need_to_be_online():
     global_count = cache.RedisDict('global_count')
     today = datetime.now().strftime('%Y-%m-%d')
 
-    if global_count['today'] != today:
-        global_count['today'] = today
-        global_count['online_time'] = get_random_time(config.ONLINE_HOUR)
-        global_count['offline_time'] = get_random_time(config.OFFLINE_HOUR)
+    if await global_count['today'] != today:
+        global_count.set('today', today)
+        global_count.set('online_time', get_random_time(config.ONLINE_HOUR))
+        global_count.set('offline_time', get_random_time(config.OFFLINE_HOUR))
 
-    if int(global_count['online_time']) < get_now_timestamp() < int(global_count['offline_time']) and randint(0, 10) == 5:
+    if int(await global_count['online_time']) < get_now_timestamp() < int(await global_count['offline_time']) and\
+            randint(0, 10) == 5:
         return True
     return False
 

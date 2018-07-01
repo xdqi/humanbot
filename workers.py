@@ -83,9 +83,9 @@ class Worker(Thread, metaclass=WorkProperties):
         raise NotImplementedError
 
     @classmethod
-    def stat(cls):
+    async def stat(cls):
         return '{} worker: {} seconds ago, size {}\n'.format(
-            cls.name, get_now_timestamp() - int(cls.status['last']), block(cls.queue.qsize()))
+            cls.name, get_now_timestamp() - int(await cls.status['last']), await cls.queue.qsize())
 
 
 class CoroutineWorker(metaclass=WorkProperties):
@@ -111,8 +111,8 @@ class CoroutineWorker(metaclass=WorkProperties):
                     continue
                 await self.handler(engine, message)
                 await self.queue.task_done()
-                await self.status.setitem('last', get_now_timestamp())
-                await self.status.setitem('size', await self.queue.qsize())
+                await self.status.set('last', get_now_timestamp())
+                await self.status.set('size', await self.queue.qsize())
             except KeyboardInterrupt:
                 await self.queue.put(message)
                 break
@@ -338,8 +338,8 @@ class FetchHistoryWorker(CoroutineWorker):
                     msg.fwd_from.username,
                     msg.fwd_from.lang_code)
 
-            self.status['last'] = get_now_timestamp()
-            self.status[str(gid)] = msg.id
+            await self.status.set('last', get_now_timestamp())
+            await self.status.set(str(gid), msg.id)
 
     @classmethod
     async def stat(cls):
@@ -354,9 +354,9 @@ async def history_add_handler(bot, update, text):
 
 
 async def workers_handler(bot, update, text):
-    return MessageInsertWorker.stat() + \
-           MessageMarkWorker.stat() + \
+    return await MessageInsertWorker.stat() + \
+           await MessageMarkWorker.stat() + \
            await FindLinkWorker.stat() + \
            await OcrWorker.stat() + \
-           EntityUpdateWorker.stat() + \
+           await EntityUpdateWorker.stat() + \
            await FetchHistoryWorker.stat()

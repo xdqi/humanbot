@@ -143,7 +143,7 @@ async def main():
         dispatcher.register_errors_handler(error_handler)
 
         # start webhook server
-        httpd.app.router.add_route('*', conf['path'], make_webhook_handler(dispatcher), name=conf['path'])
+        httpd.app.router.add_route('*', conf['path'], make_webhook_handler(dispatcher), name=conf['name'].replace(' ', '_'))
 
         logger.info('Webhook server is ready for %s', conf['name'])
 
