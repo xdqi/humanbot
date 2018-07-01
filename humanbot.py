@@ -245,5 +245,7 @@ async def main():
 
 
 if __name__ == '__main__':
+    import uvloop
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     realbot.init(0)
     block(main())

@@ -6,7 +6,7 @@ from io import BytesIO
 from threading import current_thread
 from os import makedirs
 from random import randint
-from json import dumps as to_json, loads as from_json
+from ujson import dumps as to_json, loads as from_json
 
 import aiohttp
 from raven import Client as RavenClient
