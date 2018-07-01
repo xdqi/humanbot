@@ -136,7 +136,6 @@ async def update_new_message_handler(event: events.NewMessage.Event):
         await update_group(event.client, event.chat_id)
 
     if await need_to_be_online():
-        print(event.input_chat)
         await event.client.send_read_acknowledge(event.input_chat, max_id=event.message.id, clear_mentions=True)
 
 
