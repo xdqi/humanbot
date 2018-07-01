@@ -1,3 +1,4 @@
+import asyncio
 import traceback
 from os import getpid
 from threading import current_thread
@@ -8,6 +9,7 @@ from logging import getLogger, INFO, DEBUG
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update, ChatType, Message, User, PhotoSize, ContentType
 import aiogram.dispatcher.webhook
+from aiogram.utils import context as aiogram_context
 
 import config
 import workers
@@ -110,6 +112,8 @@ def make_webhook_handler(dispatcher):
 
 async def main():
     logger.setLevel(INFO)
+    asyncio.get_event_loop().set_task_factory(aiogram_context.task_factory)
+
     Bot.delete_webhook = delete_webhook
     aiogram.dispatcher.webhook._check_ip = lambda: True
 
