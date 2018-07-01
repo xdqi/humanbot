@@ -123,7 +123,7 @@ class CoroutineWorker(metaclass=WorkProperties):
 
     def start(self, count: int=1):
         for _ in range(count):
-            noblock(type(self)())
+            noblock(type(self)()())
 
     async def handler(self, engine, message: str):
         raise NotImplementedError
