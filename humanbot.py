@@ -245,5 +245,5 @@ async def main():
 
 
 if __name__ == '__main__':
-    realbot.init()
+    realbot.init(0)
     block(main())
