@@ -124,4 +124,5 @@ class RedisDict(RedisObject):
         await self.r.hincrby(self.name, key, val)
 
     async def items(self):
-        return ((k.decode('utf-8'), v.decode('utf-8')) for k, v in await self.r.hgetall(self.name).items())
+        d = await self.r.hgetall(self.name)
+        return ((k.decode('utf-8'), v.decode('utf-8')) for k, v in d.items())
