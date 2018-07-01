@@ -192,9 +192,9 @@ async def main():
         client = conf['client']  # type: TelegramClient
 
         logger.info(f'Connecting to Telegram Servers with {conf["name"]}...')
-        client.connect()
+        await client.connect()
 
-        if not client.is_user_authorized():
+        if not await client.is_user_authorized():
             logger.info('Unauthorized user')
             await client.send_code_request(conf["phone_number"])
             code_ok = False
