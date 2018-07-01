@@ -92,7 +92,7 @@ class MyDispatcher(Dispatcher):
 
     def register_command_handler(self, commands, callback, *kargs, **kwargs):
         async def command_handler(message: Message):
-            text = message.text[1 + len(message.get_full_command()):].strip()
+            text = message.get_full_command()[1]
             result = await callback(self, message, text)
             if result:  # we allows no message
                 return aiogram.dispatcher.webhook.SendMessage(chat_id=message.chat.id,
