@@ -97,6 +97,7 @@ def update_handler_wrapper(func):
             if isinstance(e, ValueError) and 'find the input entity for "PeerUser' in e.args[0]:
                 exc = e.args[0]
                 send_to_admin = False
+                return
             elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
                 exc = repr(e.args)
             elif isinstance(e, AttributeError):
@@ -108,10 +109,10 @@ def update_handler_wrapper(func):
             if send_to_admin:  # exception that should be send to administrator
                 await send_to_admin_channel(info + exc)
 
-            process_end_time = datetime.now()
-            process_time = process_end_time - process_start_time
-            await global_count.incrby('received_message', 1)
-            await global_count.incrby('total_used_time', int(process_time.total_seconds()))
+        process_end_time = datetime.now()
+        process_time = process_end_time - process_start_time
+        await global_count.incrby('received_message', 1)
+        await global_count.incrby('total_used_time', int(process_time.total_seconds()))
 
     return wrapped
 
