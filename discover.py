@@ -98,7 +98,7 @@ async def get_available_bot() -> Bot:
     blacklist = set()
     for k, v in await bot_info.items():
         if float(v) > get_now_timestamp():
-            await blacklist.add(k)
+            blacklist.add(k)
 
     if len(all_bot - blacklist) < 3:
         return None

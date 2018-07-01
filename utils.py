@@ -27,20 +27,15 @@ logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=AioHttpTransport)
 
 
-class FakeResponse():
-    async def json(self):
-        return {}
-
-
 async def wget_retry(url, remaining_retry=1):
     if remaining_retry == 0:
         traceback.print_exc()
-        return FakeResponse()
+        return {}
     try:
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as resp:
-                return resp
+                return resp.json(content_type=None)
     except aiohttp.ServerTimeoutError:
         return await wget_retry(url, remaining_retry - 1)
 
@@ -84,8 +79,7 @@ async def upload_log(buffer, path, filename) -> str:
 async def ocr(fullpath: str):
     # do the ocr on server
     result = 'tgpic://kosaka/{}/{}'.format(config.FTP_NAME, fullpath)
-    req = await wget_retry(config.OCR_URL + fullpath)
-    ocr_result = await req.json()  # type: dict
+    ocr_result = await wget_retry(config.OCR_URL + fullpath)  # type: dict
     if 'body' in ocr_result.keys():
         result += '\n'
         result += ocr_result['body']
