@@ -7,7 +7,7 @@ from logging import getLogger, INFO, DEBUG
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update, ChatType, Message, User, PhotoSize, ContentType
-from aiogram.dispatcher.webhook import WebhookRequestHandler
+import aiogram.dispatcher.webhook
 
 import config
 import workers
@@ -101,7 +101,7 @@ class MyDispatcher(Dispatcher):
 
 
 def make_webhook_handler(dispatcher):
-    class MyWebhookRequestHandler(WebhookRequestHandler):
+    class MyWebhookRequestHandler(aiogram.dispatcher.webhook.WebhookRequestHandler):
         def get_dispatcher(self):
             return dispatcher
 
@@ -111,6 +111,7 @@ def make_webhook_handler(dispatcher):
 async def main():
     logger.setLevel(INFO)
     Bot.delete_webhook = delete_webhook
+    aiogram.dispatcher.webhook._check_ip = lambda: True
 
     for conf in config.BOTS:
         bot = Bot(token=conf['token'])
