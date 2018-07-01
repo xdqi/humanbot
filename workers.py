@@ -183,6 +183,7 @@ class OcrWorker(CoroutineWorker):
             if not records.rowcount:
                 logger.warning('ocr record %s found %s items, fail', str(stmt), records.rowcount)
                 await OcrWorker.queue.put(message)
+                await asyncio.sleep(0.1)
                 return
             row = await records.fetchone()
             record_text = row.text
