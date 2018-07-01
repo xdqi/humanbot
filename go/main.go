@@ -10,6 +10,8 @@ func main() {
 			insertMain()
 		} else if os.Args[1] == "--entity" {
 			entityMain()
+		} else if os.Args[1] == "--mark" {
+			markMain()
 		}
 	}
 }

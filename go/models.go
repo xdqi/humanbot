@@ -5,7 +5,7 @@ import "gopkg.in/guregu/null.v3"
 type ChatNew struct {
 	ID        int      `gorm:"column:id;AUTO_INCREMENT;primary_key" json:"id,omitempty"`
 	ChatId    int64    `gorm:"column:chatid" json:"chat_id"`
-	MessageId int64    `gorm:"column:messageid" json:"message_id"`
+	MessageId int      `gorm:"column:messageid" json:"message_id"`
 	UserId    null.Int `gorm:"column:userid" json:"user_id"`
 	Text      string
 	Date      int      `gorm:"column:time"`
@@ -15,6 +15,14 @@ type ChatNew struct {
 func (ChatNew) TableName() string {
 	return "chat_new"
 }
+
+type ChatFlag int16
+
+const (
+	ChatFlagNew     ChatFlag = 0
+	ChatFlagEdited  ChatFlag = 1
+	ChatFlagDeleted ChatFlag = 2
+)
 
 type User struct {
 	UID       int         `gorm:"column:uid;primary_key" json:"user_id"`

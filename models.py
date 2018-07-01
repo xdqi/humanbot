@@ -3,7 +3,7 @@ from logging import getLogger
 
 from sqlalchemy import engine_from_config, func
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Index, \
+from sqlalchemy import Table, Column, Index, \
     Integer, BigInteger, SmallInteger, String, Text
 from sqlalchemy.orm import sessionmaker, scoped_session
 
@@ -90,7 +90,7 @@ session_factory = sessionmaker(bind=engine)
 Session = scoped_session(session_factory)
 
 
-def update_user_real(user_id, first_name, last_name, username, lang_code):
+async def update_user_real(user_id, first_name, last_name, username, lang_code):
     """
     Update user information to database
 
@@ -102,7 +102,7 @@ def update_user_real(user_id, first_name, last_name, username, lang_code):
     :return:
     """
     from workers import EntityUpdateWorker
-    EntityUpdateWorker.queue.put(utils.to_json(dict(
+    await EntityUpdateWorker.queue.put(utils.to_json(dict(
         type='user',
         user=dict(
             user_id=user_id,
@@ -152,7 +152,7 @@ def update_user(session, user_id, first_name, last_name, username, lang_code):
             session.add(change)
 
 
-def update_group_real(master_uid, chat_id, name, link):
+async def update_group_real(master_uid, chat_id, name, link):
     """
     Update group information to database
 
@@ -163,7 +163,7 @@ def update_group_real(master_uid, chat_id, name, link):
     :return:
     """
     from workers import EntityUpdateWorker
-    EntityUpdateWorker.queue.put(utils.to_json(dict(
+    await EntityUpdateWorker.queue.put(utils.to_json(dict(
         type='group',
         group=dict(
             master_uid=master_uid,
@@ -203,7 +203,7 @@ def update_group(session, master_uid, chat_id, name, link):
             session.add(change)
 
 
-def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=ChatFlag.new, find_link=True):
+async def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datetime, flag=ChatFlag.new, find_link=True):
     from discover import find_link_enqueue
     from workers import MessageInsertWorker
     if not msg:  # Not text message
@@ -217,16 +217,21 @@ def insert_message(chat_id: int, message_id, user_id: int, msg: str, date: datet
                 date=utc_timestamp,
                 flag=flag)
 
-    MessageInsertWorker.queue.put(utils.to_json(chat))
+    await MessageInsertWorker.queue.put(utils.to_json(chat))
 
     if not find_link:
         return
-    find_link_enqueue(msg)
+    await find_link_enqueue(msg)
 
 
-def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=ChatFlag.new):
+async def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=ChatFlag.new):
     utc_date = date.replace(tzinfo=timezone.utc)
-    insert_message(chat_id, message_id, user_id, msg, utc_date, flag, find_link=False)
+    await insert_message(chat_id, message_id, user_id, msg, utc_date, flag, find_link=False)
+
+
+class Core:
+    ChatNew = Base.metadata.tables['chat_new']  # type: Table
+    Group = Base.metadata.tables['groups']  # type: Table
 
 
 if __name__ == '__main__':

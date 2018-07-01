@@ -2,41 +2,51 @@ import utils
 import logging
 import config
 
-from flask import Flask, request
-from gevent.pywsgi import WSGIServer
+from aiohttp import web
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
 
-
 logger = logging.getLogger(__name__)
-app = Flask(__name__)
+app = web.Application()
+routes = web.RouteTableDef()
 
 
-@app.route(config.VOICE_WEBHOOK_PATH, methods=['POST'])
-def record():
-    sender = request.values.get('From', '<unknown number>')
-    me = request.values.get('To', '<unknown number>')
+@routes.post(config.VOICE_WEBHOOK_PATH)
+async def record(request):
+
+    post_data = await request.post()
+    data = {**post_data, **request.GET}
+
+    sender = data.get('From', '<unknown number>')
+    me = data.get('To', '<unknown number>')
     logger.warning(f'Recorded from {sender} to {me}.')
-    utils.send_to_admin_channel(f'Recorded voice from {sender} to {me}.')
+    await utils.send_to_admin_channel(f'Recorded voice from {sender} to {me}.')
 
     response = VoiceResponse()
     response.record()
     response.hangup()
-    return str(response)
+    return web.Response(text=str(response), content_type='text/xml')
 
 
-@app.route(config.SMS_WEBHOOK_PATH, methods=['POST'])
-def sms():
-    sender = request.values.get('From', '<unknown number>')
-    me = request.values.get('To', '<unknown number>')
-    body = request.values.get('Body', '<unknown message>')
+@routes.post(config.SMS_WEBHOOK_PATH)
+async def sms(request):
+    post_data = await request.post()
+    data = {**post_data, **request.GET}
+
+    sender = data.get('From', '<unknown number>')
+    me = data.get('To', '<unknown number>')
+    body = data.get('Body', '<unknown message>')
 
     logger.warning(f'Received SMS from {sender} to {me}: \n{body}')
-    utils.send_to_admin_channel(f'Received SMS from {sender} to {me}: \n{body}')
-    return str(MessagingResponse())
+    await utils.send_to_admin_channel(f'Received SMS from {sender} to {me}: \n{body}')
+    return web.Response(text=str(str(MessagingResponse())), content_type='text/xml')
 
 
-def main():
+async def main():
     logger.info('Bot, SMS and Audio webhook server started')
-    server = WSGIServer((config.SMS_WEBHOOK_LISTEN, config.SMS_WEBHOOK_PORT), app)
-    server.serve_forever()
+    app.add_routes(routes)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host=config.SMS_WEBHOOK_LISTEN, port=config.SMS_WEBHOOK_PORT)
+    await site.start()

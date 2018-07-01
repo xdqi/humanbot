@@ -72,8 +72,10 @@ MYSQL_CONFIG = {
     'user': 'user',
     'password': 'pass',
     'host': 'db.example.com',
+    'port': 3306,
     'db_prefix': 'session_',
 }
+MYSQL_DATABASE = 'humanbot'
 
 DB_CONFIG = {
     'sqlalchemy.url': 'sqlite:///output.db'

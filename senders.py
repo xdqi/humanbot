@@ -1,4 +1,4 @@
-from telegram import Bot
+from aiogram import Bot
 from telethon import TelegramClient
 import config
 from typing import Dict

@@ -1,18 +1,21 @@
-telethon-sync
+telethon>1.0
 cryptg
-python-telegram-bot
+aiogram<2.0
 
-requests
-flask
+curio
+uvloop
 
-minio
-
-sqlalchemy
-mysql-connector-python
-redis
+aiohttp
 
 raven
+raven-aiohttp
 
-gevent
+aiobotocore
 
 twilio
+
+aiomysql
+PyMySQL>=0.7.5,<0.9
+sqlalchemy
+mysql-connector-python
+aioredis

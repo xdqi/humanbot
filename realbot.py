@@ -4,17 +4,16 @@ from threading import current_thread
 from typing import List
 from datetime import datetime
 from logging import getLogger, INFO, DEBUG
-from threading import Thread
-import json
 
-from telegram.ext import Updater, MessageHandler, Filters
-from telegram import Update, Bot, Message, User, PhotoSize, Chat
-import flask
+from aiogram import Bot, Dispatcher
+from aiogram.types import Update, ChatType, Message, User, PhotoSize, ContentType
+from aiogram.dispatcher.webhook import WebhookRequestHandler
 
 import config
 import workers
 import senders
-from utils import report_exception, AdminCommandHandler, show_commands_handler, get_now_timestamp, send_to_admin_channel, to_json
+import discover
+from utils import report_exception, get_now_timestamp, send_to_admin_channel, to_json
 import cache
 from models import update_user_real, update_group_real, insert_message, ChatFlag
 import admin
@@ -24,40 +23,31 @@ import humanbot
 logger = getLogger(__name__)
 
 
-def update_user(user: User):
-    update_user_real(user.id, user.first_name, user.last_name, user.username, user.language_code)
+async def update_user(user: User):
+    await update_user_real(user.id, user.first_name, user.last_name, user.username, user.language_code)
 
 
 bot_group_last_changed = cache.RedisExpiringSet('bot_group_last_changed', expire=300)
-def update_group(bot: Bot, chat_id: int):
-    if str(chat_id) in bot_group_last_changed:
+async def update_group(bot: Bot, chat_id: int):
+    if await bot_group_last_changed.contains(str(chat_id)):
         return
-    chat = bot.get_chat(chat_id)
-    bot_group_last_changed.add(str(chat_id))
-    if chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
-        update_group_real(bot.id, chat.id, chat.title, chat.username)
+    chat = await bot.get_chat(chat_id)
+    await bot_group_last_changed.add(str(chat_id))
+    if chat.type in [ChatType.GROUP, ChatType.SUPER_GROUP]:
+        await update_group_real((await bot.me).id, chat.id, chat.title, chat.username)
 
 
-def message(bot: Bot, update: Update):
-    if hasattr(update, 'message'):
-        msg = update.message  # type: Message
-        flag = ChatFlag.new
-    elif hasattr(update, 'edited_message'):
-        msg = update.edited_message  # type: Message
-        flag = ChatFlag.edited
-    else:
-        return
-
+async def message(bot: Bot, msg: Message, flag: ChatFlag):
     user = msg.from_user  # type: User
     text = msg.text
 
     if msg.photo:  # type: List[PhotoSize]
-        text = msg.text or msg.caption or ''  # in case of `None`
+        text = msg.md_text or msg.caption or ''  # in case of `None`
         photo = max(msg.photo, key=lambda p: p.file_size)  # type: PhotoSize
         now = datetime.now()
 
         info = to_json(dict(
-            client=bot.id,
+            client=(await bot.me).id,
             file_id=photo.file_id,
             path='{}/{}'.format(now.year, now.month),
             filename='{}-{}.jpg'.format(get_now_timestamp(), photo.file_id)
@@ -67,92 +57,92 @@ def message(bot: Bot, update: Update):
 
     if user:
         uid = user.id
-        update_user(user)
+        await update_user(user)
     else:
         uid = None
 
-    insert_message(msg.chat_id, msg.message_id, uid, text, msg.date, flag)
-    update_group(bot, msg.chat_id)
+    await insert_message(msg.chat.id, msg.message_id, uid, text, msg.date, flag, find_link=False)
+    await discover.find_link_enqueue(msg.text)
+    await update_group(bot, msg.chat.id)
 
 
-def log_message(bot: Bot, update: Update):
-    logger.debug('realbot %s', update)
+async def error_handler(bot: Bot, update: Update, error: Exception):
+    report_exception()
+    logger.error('Exception raised on PID %s %s', getpid(), current_thread())
+    await send_to_admin_channel(f'Exception raised on PID {getpid()} {current_thread()}\n {traceback.format_exc()}')
+    traceback.print_exc()
 
 
-def error_handler(bot: Bot, update: Update, error: Exception):
-    try:
-        raise error
-    except:
-        report_exception()
-        logger.error('Exception raised on PID %s %s', getpid(), current_thread())
-        send_to_admin_channel(f'Exception raised on PID {getpid()} {current_thread()}\n {traceback.format_exc()}')
-        traceback.print_exc()
+async def delete_webhook(*args, **kwargs):
+    return True
 
 
-def bot_handler(updater: Updater):
-    if flask.request.headers.get('content-type').lower() == 'application/json':
-        json_string = flask.request.get_data().decode('utf-8')
-        logger.debug('Webhook received data: ' + json_string)
+class MyDispatcher(Dispatcher):
+    def make_message_handler(self, callback, flag: ChatFlag):
+        async def my_message_handler(msg):
+            await callback(self.bot, msg, flag)
 
-        update = Update.de_json(json.loads(json_string), updater.bot)
-        logger.debug('Received Update with ID %d on Webhook' % update.update_id)
+        return my_message_handler
 
-        updater.update_queue.put(update)
-        return ''
-    else:
-        flask.abort(403)
+    def register_listen_handler(self, callback, *kargs, **kwargs):
+        self.register_message_handler(callback=self.make_message_handler(callback, ChatFlag.new), *kargs, **kwargs)
+        self.register_edited_message_handler(callback=self.make_message_handler(callback, ChatFlag.edited), *kargs, **kwargs)
+
+    def register_command_handler(self, commands, callback, *kargs, **kwargs):
+        async def command_handler(message: Message):
+            text = message.text[1 + len(message.get_full_command()):].strip()
+            result = await callback(self, message, text)
+            if result:  # we allows no message
+                await message.reply(text=result, parse_mode='HTML')
+
+        self.register_message_handler(callback=command_handler,
+                                      commands=commands,
+                                      func=lambda msg: msg.chat.id in config.ADMIN_UIDS)
 
 
-class MyUpdater(Updater):
-    def _start_webhook(self, listen, port, url_path, cert, key, bootstrap_retries, clean,
-                       webhook_url, allowed_updates):
-        self.logger.debug('Updater thread started (webhook)')
-        httpd.app.add_url_rule(url_path, url_path, lambda: bot_handler(self), methods=['POST'])
+def make_webhook_handler(dispatcher):
+    class MyWebhookRequestHandler(WebhookRequestHandler):
+        def get_dispatcher(self):
+            return dispatcher
 
-    def _stop_httpd(self):
-        pass
+    return MyWebhookRequestHandler
 
 
-def main():
+async def main():
     logger.setLevel(INFO)
-    Bot.delete_webhook = lambda self: True
+    Bot.delete_webhook = delete_webhook
 
     for conf in config.BOTS:
-        updater = MyUpdater(token=conf['token'])
-        updater.start_webhook(url_path=conf['path'])
+        bot = Bot(token=conf['token'])
+        dispatcher = MyDispatcher(bot)
 
         # set up message handlers
-        dispatcher = updater.dispatcher
-        senders.clients[conf['uid']] = updater.bot
-        senders.bots[conf['uid']] = updater
+        senders.clients[conf['uid']] = bot
+        senders.bots[conf['uid']] = bot
 
         # admin bot only
         if conf['token'] == config.BOT_TOKEN:
-            res = updater.bot.set_webhook(url=conf['url'])
+            res = await bot.set_webhook(url=conf['url'])
             logger.info('Start webhook for %s returns %s', conf['name'], res)
 
-            dispatcher.add_handler(AdminCommandHandler('exec', admin.execute_command_handler))
-            dispatcher.add_handler(AdminCommandHandler('py', admin.evaluate_script_handler))
-            dispatcher.add_handler(AdminCommandHandler('joinpub', admin.join_public_group_handler))
-            dispatcher.add_handler(AdminCommandHandler('joinprv', admin.join_private_group_handler))
-            dispatcher.add_handler(AdminCommandHandler('leave', admin.leave_group_handler))
-            dispatcher.add_handler(AdminCommandHandler(['stats', 'stat'], humanbot.statistics_handler))
-            dispatcher.add_handler(AdminCommandHandler('threads', humanbot.threads_handler))
-            dispatcher.add_handler(AdminCommandHandler('workers', workers.workers_handler))
-            dispatcher.add_handler(AdminCommandHandler('fetch', workers.history_add_handler))
-            dispatcher.add_handler(AdminCommandHandler('dialogs', admin.dialogs_handler))
-            dispatcher.add_handler(AdminCommandHandler('help', show_commands_handler))
+            dispatcher.register_command_handler('exec', admin.execute_command_handler)
+            dispatcher.register_command_handler('py', admin.evaluate_script_handler)
+            dispatcher.register_command_handler('joinpub', admin.join_public_group_handler)
+            dispatcher.register_command_handler('joinprv', admin.join_private_group_handler)
+            dispatcher.register_command_handler('leave', admin.leave_group_handler)
+            dispatcher.register_command_handler(['stats', 'stat'], humanbot.statistics_handler)
+            dispatcher.register_command_handler('threads', humanbot.threads_handler)
+            dispatcher.register_command_handler('workers', workers.workers_handler)
+            dispatcher.register_command_handler('fetch', workers.history_add_handler)
+            dispatcher.register_command_handler('dialogs', admin.dialogs_handler)
+            # dispatcher.register_command_handler('help', show_commands_handler)
 
-        message_handler = MessageHandler(filters=Filters.text, edited_updates=True, callback=message)
-        dispatcher.add_handler(message_handler)
+        dispatcher.register_listen_handler(message, content_types=ContentType.TEXT | ContentType.PHOTO | ContentType.DOCUMENT)
 
-        picture_handler = MessageHandler(filters=Filters.photo | Filters.document, edited_updates=True, callback=message)
-        dispatcher.add_handler(picture_handler)
+        dispatcher.register_errors_handler(error_handler)
 
-        all_handler = MessageHandler(filters=Filters.all, callback=log_message)
-        dispatcher.add_handler(all_handler)
-
-        dispatcher.add_error_handler(error_handler)
+        # start webhook server
+        httpd.app.router.add_route('*', conf['path'], make_webhook_handler(dispatcher), name=conf['path'])
 
         logger.info('Webhook server is ready for %s', conf['name'])
 
