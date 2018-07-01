@@ -31,7 +31,7 @@ func markMain() {
 	log.Println("Mark worker has started")
 
 	for {
-		messages := markQueue.BulkGetBytes(100)
+		messages := markQueue.BulkGetBytes(10)
 
 		if len(messages) == 0 {
 			time.Sleep(10 * time.Millisecond)
@@ -51,11 +51,11 @@ func markMain() {
 				if count <= 0 {
 					item.Tries += 1
 					if item.Tries > 2 {
-						continue
+						break
 					}
 					if newMsg, err := json.Marshal(item); err != nil {
 						logger.Printf("insert mark message back error: %v", err)
-						continue
+						break
 					} else {
 						markQueue.PutBytes(newMsg)
 					}

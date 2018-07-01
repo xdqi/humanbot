@@ -26,7 +26,7 @@ func insertMain() {
 	log.Println("Insert worker has started")
 
 	for {
-		messages := insertQueue.BulkGetBytes(100)
+		messages := insertQueue.BulkGetBytes(10)
 
 		if len(messages) == 0 {
 			time.Sleep(10 * time.Millisecond)
