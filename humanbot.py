@@ -46,7 +46,7 @@ async def statistics_handler(bot, update, text):
 
 user_last_changed = cache.RedisExpiringSet('user_last_changed', expire=3600)
 async def update_user(client, user_id):
-    if user_id is None or user_id in user_last_changed:  # user should be updated at a minute basis
+    if user_id is None or user_last_changed.contains(user_id):  # user should be updated at a minute basis
         return
     try:
         user = await client.get_entity(PeerUser(user_id))  # type: User
