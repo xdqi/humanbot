@@ -3,15 +3,14 @@ import config
 import utils
 
 
-class WorkProperties(type):
+class RedisProperties(type):
     def __new__(mcs, class_name, class_bases, class_dict):
-        name = class_dict['name']
         new_class_dict = class_dict.copy()
         new_class_dict['r'] = utils.block(aioredis.create_redis_pool(address=config.REDIS_URL, minsize=1, maxsize=20))
         return type.__new__(mcs, class_name, class_bases, new_class_dict)
 
 
-class RedisObject:
+class RedisObject(metaclass=RedisProperties):
     r = None  # type: aioredis.Redis
 
     def __init__(self):
