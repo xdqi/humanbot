@@ -102,7 +102,10 @@ class CoroutineWorker(metaclass=WorkProperties):
 
     async def run(self):
         logger.info('%s worker has started', self.name)
-        engine = await aiomysql.sa.create_engine(**config.MYSQL_CONFIG, db=config.MYSQL_DATABASE, charset='utf8mb4')
+        engine = await aiomysql.sa.create_engine(**config.MYSQL_CONFIG,
+                                                 db=config.MYSQL_DATABASE,
+                                                 charset='utf8mb4',
+                                                 autocommit=True)
 
         while True:
             try:
@@ -175,15 +178,20 @@ class OcrWorker(CoroutineWorker):
     name = 'ocr'
 
     async def handler(self, engine: aiomysql.sa.Engine, message: str):
-        record_id = int(message)
+        ocr_request = from_json(message)  # type: dict # {'chat_id': 114, 'message_id': 514}
+
+        record_id = ocr_request['id']
 
         async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
             stmt = models.Core.ChatNew.select().where(models.ChatNew.id == record_id)
             records = await conn.execute(stmt)
             if not records.rowcount:
-                logger.warning('ocr record %s found %s items, fail', str(stmt), records.rowcount)
-                await OcrWorker.queue.put(message)
-                await asyncio.sleep(0.1)
+                logger.warning('ocr record %s found %s items (try %s), fail',
+                               record_id, records.rowcount, ocr_request.get('tries', 0))
+                ocr_request['tries'] = ocr_request.get('tries', 0) + 1
+                if ocr_request['tries'] < 1000:
+                    await OcrWorker.queue.put(to_json(ocr_request))
+                    await asyncio.sleep(0.1)
                 return
             row = await records.fetchone()
             record_text = row.text
@@ -205,6 +213,9 @@ class OcrWorker(CoroutineWorker):
             except AuthKeyUnregisteredError as e:
                 report_exception()
                 logger.warning('download picture auth key unregistered error %r', e)
+                return
+            except FloodWaitError as e:
+                logger.warning('download picture flooded (%s), wait %s seconds', info['client'], e.seconds)
                 return
         elif isinstance(client, Bot):
             file_id = info['file_id']
