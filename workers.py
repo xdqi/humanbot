@@ -19,6 +19,7 @@ import sqlalchemy
 import cache
 import config
 import models
+import realbot
 import senders
 from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
     send_to_admin_channel, noblock, block
@@ -116,7 +117,8 @@ class CoroutineWorker(metaclass=WorkProperties):
             except KeyboardInterrupt:
                 await self.queue.put(message)
                 break
-            except:
+            except BaseException as e:
+                logger.error('%s worker fails: %s', str(type(self)), e)
                 traceback.print_exc()
                 report_exception()
                 await self.queue.put(message)
@@ -179,6 +181,8 @@ class OcrWorker(CoroutineWorker):
             stmt = models.Core.ChatNew.select().where(models.ChatNew.id == record_id)
             records = await conn.execute(stmt)
             if not records.rowcount:
+                logger.warning('ocr record %s found %s items, fail', str(stmt), records.rowcount)
+                await OcrWorker.queue.put(message)
                 return
             row = await records.fetchone()
             record_text = row.text
@@ -204,14 +208,17 @@ class OcrWorker(CoroutineWorker):
         elif isinstance(client, Bot):
             file_id = info['file_id']
 
-            file = await client.get_file(file_id)
-            await file.download(destination=buffer)
+            try:
+                await client.download_file_by_id(file_id, destination=buffer)
+            except RuntimeError:
+                realbot.init(0)
+                raise
 
         buffer.seek(0)
-        logger.info('pic downloaded')
+        logger.info('pic %s downloaded ', record_id)
         full_path = await upload_pic(buffer, info['path'], info['filename'])
         result = await ocr(full_path)
-        logger.info('ocr complete')
+        logger.info('ocr %s complete', record_id)
 
         async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
             stmt = models.Core.ChatNew.\
@@ -219,6 +226,7 @@ class OcrWorker(CoroutineWorker):
                 where(models.ChatNew.id == record_id).\
                 values(text=result + '\n' + text)
             await conn.execute(stmt)
+            await conn.execute('COMMIT;')
 
 
 class EntityUpdateWorker(Worker):

@@ -203,6 +203,7 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
                                                  link=link,
                                                  master=senders.invoker.conf['uid'] if joined else None)
         await conn.execute(stmt)
+        await conn.execute('COMMIT')
 
     return gid, joined
 
