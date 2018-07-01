@@ -90,7 +90,8 @@ class RedisDict(RedisObject):
         self.name = name
 
     async def repr(self):
-        return 'RedisDict%s' % {k.decode('utf-8'): v.decode('utf-8') for k, v in await self.r.hgetall(self.name).items()}
+        d = await self.r.hgetall(self.name)
+        return 'RedisDict%s' % {k.decode('utf-8'): v.decode('utf-8') for k, v in d.items()}
 
     def __repr__(self):
         return utils.block(self.repr())
@@ -105,7 +106,7 @@ class RedisDict(RedisObject):
         return utils.block(self.getitem(key))
 
     async def setitem(self, key: str, value: str):
-        self.r.hset(self.name, key, value)
+        await self.r.hset(self.name, key, value)
 
     def __setitem__(self, key: str, value: str):
         utils.block(self.setitem(key, value))
