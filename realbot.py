@@ -95,7 +95,10 @@ class MyDispatcher(Dispatcher):
             text = message.text[1 + len(message.get_full_command()):].strip()
             result = await callback(self, message, text)
             if result:  # we allows no message
-                await message.reply(text=result, parse_mode='HTML')
+                return aiogram.dispatcher.webhook.SendMessage(chat_id=message.chat.id,
+                                                              reply_to_message_id=message.message_id,
+                                                              text=result,
+                                                              parse_mode='HTML')
 
         self.register_message_handler(callback=command_handler,
                                       commands=commands,
