@@ -212,5 +212,6 @@ async def find_link_enqueue(msg: str):
     if await FindLinkWorker.queue.qsize() > 50:
         await send_to_admin_channel('Find link queue full, worker dead?')
         FindLinkWorker().start()
-    else:
+        return
+    if msg:
         await FindLinkWorker.queue.put(msg)
