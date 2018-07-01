@@ -35,7 +35,7 @@ async def wget_retry(url, remaining_retry=1):
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as resp:
-                return resp.json(content_type=None)
+                return await resp.json(content_type=None)
     except aiohttp.ServerTimeoutError:
         return await wget_retry(url, remaining_retry - 1)
 
