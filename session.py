@@ -65,11 +65,13 @@ class FakeCursor:
 
     def execute(self, query: str, *args, **kwargs):
         query = self.process_query(query)
-        return self.cursor.execute(query, *args, **kwargs)
+        self.cursor.execute(query, *args, **kwargs)
+        return self
 
     def executemany(self, query: str, *args, **kwargs):
         query = self.process_query(query)
-        return self.cursor.executemany(query, *args, **kwargs)
+        self.cursor.executemany(query, *args, **kwargs)
+        return self
 
     def fetchone(self):
         return self.cursor.fetchone()
