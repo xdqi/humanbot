@@ -5,11 +5,15 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"encoding/json"
 	"strings"
-	"strconv"
 	"log"
 	"os"
 	"time"
 )
+
+type OcrItem struct {
+	Id    int `json:"id"`
+	Tries int `json:"tries,omitempty"`
+}
 
 func insertMain() {
 	logger := log.New(os.Stderr, "[INSERT] ", log.Ltime|log.Lshortfile)
@@ -50,7 +54,9 @@ func insertMain() {
 			client.HSet("insert_worker_status", "size", insertQueue.Size())
 
 			if strings.HasPrefix(chat.Text, OcrHint) {
-				ocrQueue.Put(strconv.Itoa(int(chat.ID)))
+				item := OcrItem{Id: chat.ID, Tries: 0}
+				b, _ := json.Marshal(&item)
+				ocrQueue.PutBytes(b)
 			}
 		}
 
