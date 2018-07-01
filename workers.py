@@ -344,7 +344,7 @@ class FetchHistoryWorker(CoroutineWorker):
     @classmethod
     async def stat(cls):
         basic = await super().stat()
-        return basic + repr(cls.status)
+        return basic + await cls.status.repr()
 
 
 async def history_add_handler(bot, update, text):

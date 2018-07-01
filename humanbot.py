@@ -32,15 +32,15 @@ logger = getLogger(__name__)
 
 async def threads_handler(bot, update, text):
     global thread_called_count
-    return str(thread_called_count)
+    return await thread_called_count.repr()
 
 
 async def statistics_handler(bot, update, text):
     global start_time, global_count
     return 'Uptime: {}s\nProcessed: {}\nAverage: {}s'.format(
-                get_now_timestamp() - int(global_count['start_time']),
-                global_count['received_message'],
-                float(global_count['total_used_time']) / float(global_count['received_message'])
+                get_now_timestamp() - int(await global_count['start_time']),
+                await global_count['received_message'],
+                float(await global_count['total_used_time']) / float(await global_count['received_message'])
             )
 
 
