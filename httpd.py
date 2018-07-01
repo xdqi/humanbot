@@ -15,7 +15,7 @@ routes = web.RouteTableDef()
 async def record(request):
 
     post_data = await request.post()
-    data = {**post_data, **request.GET}
+    data = {**post_data, **request.query}
 
     sender = data.get('From', '<unknown number>')
     me = data.get('To', '<unknown number>')
@@ -31,7 +31,7 @@ async def record(request):
 @routes.post(config.SMS_WEBHOOK_PATH)
 async def sms(request):
     post_data = await request.post()
-    data = {**post_data, **request.GET}
+    data = {**post_data, **request.query}
 
     sender = data.get('From', '<unknown number>')
     me = data.get('To', '<unknown number>')
