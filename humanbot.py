@@ -46,7 +46,7 @@ async def statistics_handler(bot, update, text):
 
 user_last_changed = cache.RedisExpiringSet('user_last_changed', expire=3600)
 async def update_user(client, user_id):
-    if user_id is None or user_last_changed.contains(user_id):  # user should be updated at a minute basis
+    if user_id is None or await user_last_changed.contains(user_id):  # user should be updated at a minute basis
         return
     try:
         user = await client.get_entity(PeerUser(user_id))  # type: User
@@ -81,7 +81,7 @@ thread_called_count = cache.RedisDict('thread_called_count')
 global_count = cache.RedisDict('global_count')
 def update_handler_wrapper(func):
     @wraps(func)
-    async def wrapped(event):
+    async def wrapped(event: events.NewMessage):
         prev_num = int(await thread_called_count.get(current_thread().name, 0))
         await thread_called_count.set(current_thread().name, prev_num + 1)
         process_start_time = datetime.now()
@@ -100,7 +100,9 @@ def update_handler_wrapper(func):
             elif isinstance(e, (AuthKeyUnregisteredError, PeerIdInvalidError)):
                 exc = repr(e.args)
             elif isinstance(e, AttributeError):
-                exc = exc + type(event.message) + repr(event.message) + type(event) + repr(event)
+                if isinstance(event, events.NewMessage):
+                    exc += '\nmsg\n' + type(event.message) + repr(event.message)
+                exc += str(type(event)) + repr(event)
 
             logger.error(info + exc)
             if send_to_admin:  # exception that should be send to administrator
@@ -133,7 +135,8 @@ async def update_new_message_handler(event: events.NewMessage.Event):
     if event.is_group or event.is_channel:
         await update_group(event.client, event.chat_id)
 
-    if need_to_be_online():
+    if await need_to_be_online():
+        print(event.input_chat)
         await event.client.send_read_acknowledge(event.input_chat, max_id=event.message.id, clear_mentions=True)
 
 
