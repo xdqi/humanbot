@@ -19,7 +19,7 @@ import sqlalchemy
 import cache
 import config
 import models
-from senders import clients
+import senders
 from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
     send_to_admin_channel, noblock, block
 
@@ -186,7 +186,7 @@ class OcrWorker(CoroutineWorker):
         hint, info_text, text = record_text.split('\n', maxsplit=2)
 
         info = from_json(info_text)
-        client = clients[info['client']]
+        client = senders.clients[info['client']]
         buffer = BytesIO()
 
         if isinstance(client, TelegramClient):
@@ -266,8 +266,13 @@ class FetchHistoryWorker(CoroutineWorker):
                 return
             row = await records.fetchone()
 
-        gid_, master, name, link, self.first = row
-        client = clients[master]
+        master = row.master
+        name = row.name
+        link = row.link
+        self.first = row.min_message_id
+
+        print(senders.clients.keys(), 'master is', repr(master))
+        client = senders.clients.get(master, None)
 
         if isinstance(client, Bot):
             await send_to_admin_channel(f'Group {name}(@{link}) is managed by a bot ({master}), '
@@ -280,7 +285,7 @@ class FetchHistoryWorker(CoroutineWorker):
                 prev = self.first
                 await self.fetch(client, gid)
                 if prev == self.first:  # no new messages
-                    del self.status[gid]
+                    await self.status.delitem(gid)
                     await send_to_admin_channel(f'Group {name}(@{link}) all fetched by {master}, last message id is {prev}')
 
                     break
@@ -300,7 +305,7 @@ class FetchHistoryWorker(CoroutineWorker):
         # profile.dump_stats('normal.profile')
 
     async def fetch(self, client, gid):
-        for msg in await client.iter_messages(entity=gid,
+        async for msg in client.iter_messages(entity=gid,
                                               limit=None,
                                               offset_id=self.first,
                                               max_id=self.first,
