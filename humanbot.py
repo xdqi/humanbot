@@ -178,6 +178,7 @@ async def update_deleted_message_handler(event: events.MessageDeleted.Event):
 # TODO: add handler to handle UpdateChannel
 
 async def main():
+
     basicConfig(level=INFO)
     logger.setLevel(INFO)
     getLogger('telethon').setLevel(WARNING)
@@ -243,4 +244,5 @@ async def main():
 
 
 if __name__ == '__main__':
+    realbot.init()
     block(main())

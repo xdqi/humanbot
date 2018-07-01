@@ -110,9 +110,12 @@ def make_webhook_handler(dispatcher):
     return MyWebhookRequestHandler
 
 
+def init():
+    asyncio.get_event_loop().set_task_factory(aiogram_context.task_factory)
+
+
 async def main():
     logger.setLevel(INFO)
-    asyncio.get_event_loop().set_task_factory(aiogram_context.task_factory)
 
     Bot.delete_webhook = delete_webhook
     aiogram.dispatcher.webhook._check_ip = lambda: True
