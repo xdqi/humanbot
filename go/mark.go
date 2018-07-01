@@ -46,7 +46,7 @@ func markMain() {
 
 			for {
 				var count int
-				db.Where(&ChatNew{ChatId: item.ChatId, MessageId: item.MessageId}).Count(&count)
+				db.Model(&ChatNew{}).Where(&ChatNew{ChatId: item.ChatId, MessageId: item.MessageId}).Count(&count)
 
 				if count <= 0 {
 					item.Tries += 1
@@ -61,7 +61,7 @@ func markMain() {
 					}
 				}
 
-				err := db.Where(&ChatNew{ChatId: item.ChatId, MessageId: item.MessageId}).
+				err := db.Model(&ChatNew{}).Where(&ChatNew{ChatId: item.ChatId, MessageId: item.MessageId}).
 					UpdateColumn("flag", gorm.Expr("flag | ?", ChatFlagDeleted)).Error
 
 				if err != nil {
