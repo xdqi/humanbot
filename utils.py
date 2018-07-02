@@ -136,7 +136,6 @@ async def send_to_admin_group(msg: str):
 
 
 def report_exception():
-    return
     raven_client.captureException()
 
 
