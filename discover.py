@@ -8,7 +8,7 @@ from struct import unpack
 
 from aiogram import Bot
 from aiogram.types import ChatType
-from aiogram.utils.exceptions import BadRequest, RetryAfter, NetworkError
+from aiogram.utils.exceptions import BadRequest, RetryAfter, NetworkError, ChatNotFound
 
 from telethon.errors import InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelsTooMuchError
 from telethon.tl.functions.channels import JoinChannelRequest
@@ -150,6 +150,9 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
     try:
         await asyncio.sleep(0.1)
         info = await fetcher.get_chat('@' + link)
+    except ChatNotFound as e:
+        logger.warning('chat not found: %s', e.text)
+        return None, False
     except (BadRequest, RetryAfter, NetworkError) as e:
         report_exception()
         if isinstance(e, RetryAfter):
