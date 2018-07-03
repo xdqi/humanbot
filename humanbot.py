@@ -13,6 +13,7 @@ from telethon import events, TelegramClient
 from telethon.errors import AuthKeyUnregisteredError, PeerIdInvalidError, \
     ChannelPrivateError
 from telethon.tl.types import PeerUser, User, Chat, ChatFull, Channel, ChannelFull
+from telethon.tl.custom.message import Message
 
 import cache
 import config
@@ -119,6 +120,8 @@ def update_handler_wrapper(func):
 
 @update_handler_wrapper
 async def update_new_message_handler(event: events.NewMessage.Event):
+    if not isinstance(event.message, Message):
+        return
     text = event.text
 
     flag = ChatFlag.new
