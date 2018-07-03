@@ -23,7 +23,11 @@ async def execute_command_handler(bot: Bot, message: Message, text: str):
 
 async def evaluate_script_handler(bot: Bot, message: Message, text: str):
     logger.info('evaluating script %s', text)
-    return '<pre>' + utils.tg_html_entity(repr(eval(text))) + '</pre>'
+    try:
+        result = repr(eval(text))
+    except (BaseException, SyntaxError) as e:
+        result = str(type(e)) + ': ' + repr(e)
+    return '<pre>' + utils.tg_html_entity(result) + '</pre>'
 
 
 async def join_public_group_handler(bot: Bot, message: Message, text: str):
