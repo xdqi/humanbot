@@ -101,6 +101,7 @@ def tg_html_entity(s: str) -> str:
 
 async def send_to(chat: int, msg: str, strip: bool=True):
     logger.info('Sending to administrators: \n%s', msg)
+    msg = tg_html_entity(msg)
     if strip and len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
         buffer = BytesIO(msg.encode('utf-8'))
         now = datetime.now()
