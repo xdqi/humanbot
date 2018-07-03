@@ -176,6 +176,50 @@ class MessageMarkWorker(Worker):
 
 class OcrWorker(CoroutineWorker):
     name = 'ocr'
+    cache = cache.RedisDailyDict('ocr')
+    lock = asyncio.Lock()
+
+    async def try_cache(self, path: str):
+        ts, file_id = path.split('-', maxsplit=1)
+        result = await self.cache[file_id]
+        if result == config.OCR_PROCESSING_HINT:
+            return True
+        elif result is None:
+            return False
+        else:
+            return result
+
+    async def do_ocr(self, info: dict):
+        client = senders.clients[info['client']]
+        buffer = BytesIO()
+
+        if isinstance(client, TelegramClient):
+            location_info = info['location']
+            del location_info['_']
+            del location_info['dc_id']
+            location = InputFileLocation(**location_info)
+
+            try:
+                await client.download_file(location, buffer)
+            except AuthKeyUnregisteredError as e:
+                report_exception()
+                logger.warning('download picture auth key unregistered error %r', e)
+                return config.OCR_HINT + '\n' + to_json(info)
+            except FloodWaitError as e:
+                logger.warning('download picture flooded (%s), wait %s seconds', info['client'], e.seconds)
+                return config.OCR_HINT + '\n' + to_json(info)
+        elif isinstance(client, Bot):
+            file_id = info['file_id']
+
+            try:
+                await client.download_file_by_id(file_id, destination=buffer)
+            except RuntimeError:
+                realbot.init(0)
+                raise
+
+        buffer.seek(0)
+        full_path = await upload_pic(buffer, info['path'], info['filename'])
+        return await ocr(full_path)
 
     async def handler(self, engine: aiomysql.sa.Engine, message: str):
         ocr_request = from_json(message)  # type: dict # {'chat_id': 114, 'message_id': 514}
@@ -199,38 +243,27 @@ class OcrWorker(CoroutineWorker):
         hint, info_text, text = record_text.split('\n', maxsplit=2)
 
         info = from_json(info_text)
-        client = senders.clients[info['client']]
-        buffer = BytesIO()
+        logger.info('ocr %s started', record_id)
 
-        if isinstance(client, TelegramClient):
-            location_info = info['location']
-            del location_info['_']
-            del location_info['dc_id']
-            location = InputFileLocation(**location_info)
+        # async with self.lock:
+        cached = await self.try_cache(info['filename'])
 
-            try:
-                await client.download_file(location, buffer)
-            except AuthKeyUnregisteredError as e:
-                report_exception()
-                logger.warning('download picture auth key unregistered error %r', e)
-                return
-            except FloodWaitError as e:
-                logger.warning('download picture flooded (%s), wait %s seconds', info['client'], e.seconds)
-                return
-        elif isinstance(client, Bot):
-            file_id = info['file_id']
-
-            try:
-                await client.download_file_by_id(file_id, destination=buffer)
-            except RuntimeError:
-                realbot.init(0)
-                raise
-
-        buffer.seek(0)
-        logger.info('pic %s downloaded ', record_id)
-        full_path = await upload_pic(buffer, info['path'], info['filename'])
-        result = await ocr(full_path)
-        logger.info('ocr %s complete', record_id)
+        if isinstance(cached, str):
+            logger.info('ocr %s cached', record_id)
+            result = cached
+        elif cached is True:
+            logger.info('ocr %s need retry', record_id)
+            await asyncio.sleep(0.1)
+            await self.queue.put(message)
+            return
+        elif cached is False:
+            ts, file_id = info['filename'].split('-', maxsplit=1)
+            await self.cache.set(file_id, config.OCR_PROCESSING_HINT)
+            result = await self.do_ocr(info)
+            if result is None:
+                result = config.OCR_FAILED_HINT + '\n' + to_json(info)
+            await self.cache.set(file_id, result)
+            logger.info('ocr %s complete', record_id)
 
         async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
             stmt = models.Core.ChatNew.\

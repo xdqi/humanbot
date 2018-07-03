@@ -1,3 +1,5 @@
+import datetime
+
 import aioredis
 import config
 import utils
@@ -6,27 +8,26 @@ import utils
 class RedisObject:
     r = None  # type: aioredis.Redis
 
-    def __init__(self):
-        pass
+    def __init__(self, name: str):
+        self.name = name
 
     @classmethod
     async def init(cls):
         cls.r = await aioredis.create_redis_pool(address=config.REDIS_URL, minsize=1, maxsize=20)
 
+    async def delete(self):
+        await self.r.delete(self.name)
+
 
 class RedisExpiringSet(RedisObject):
     def __init__(self, name, expire):
-        super().__init__()
-        self.name = name
+        super().__init__(name)
         self.expire = expire
 
     async def repr(self) -> str:
         min_timestamp = utils.get_now_timestamp() - self.expire
         items = await self.r.zrangebyscore(self.name, min_timestamp, float('+inf'))
         return 'RedisExpiringSet%s' % (i.decode('utf-8') for i in items)
-
-    def __repr__(self) -> str:
-        return utils.block(self.repr())
 
     async def contains(self, item: str) -> bool:
         saved = await self.r.zscore(self.name, item)
@@ -55,15 +56,11 @@ class RedisExpiringSet(RedisObject):
 
 class RedisQueue(RedisObject):
     def __init__(self, name: str):
-        super().__init__()
-        self.name = name
+        super().__init__(name)
 
     async def repr(self):
         items = await self.r.lrange(self.name, 0, -1)
         return 'RedisQueue%s' % (i.decode('utf-8') for i in items)
-
-    def __repr__(self):
-        return utils.block(self.repr())
 
     async def qsize(self) -> int:
         return await self.r.llen(self.name)
@@ -83,15 +80,11 @@ class RedisQueue(RedisObject):
 
 class RedisDict(RedisObject):
     def __init__(self, name: str):
-        super().__init__()
-        self.name = name
+        super().__init__(name)
 
     async def repr(self):
         d = await self.r.hgetall(self.name)
         return 'RedisDict%s' % {k.decode('utf-8'): v.decode('utf-8') for k, v in d.items()}
-
-    def __repr__(self):
-        return utils.block(self.repr())
 
     async def getitem(self, key: str) -> str:
         val = await self.r.hget(self.name, key)
@@ -126,3 +119,29 @@ class RedisDict(RedisObject):
     async def items(self):
         d = await self.r.hgetall(self.name)
         return ((k.decode('utf-8'), v.decode('utf-8')) for k, v in d.items())
+
+
+class RedisDailyDict(RedisDict):
+    def __init__(self, name):
+        self.real_name = name
+        super().__init__(self.today_prefix + self.real_name)
+
+    @property
+    def today_prefix(self):
+        today = datetime.datetime.now() - datetime.timedelta(hours=6)
+        return today.strftime('%Y-%m-%d-')
+
+    async def refresh(self):
+        today = datetime.datetime.now() - datetime.timedelta(hours=6)
+        if today.hour == 0:
+            yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+            await self.r.delete(yesterday.strftime('%Y-%m-%d-') + self.real_name)
+            self.name = today.strftime('%Y-%m-%d-') + self.real_name
+
+    async def getitem(self, key: str):
+        await self.refresh()
+        return await super().getitem(key)
+
+    async def set(self, key: str, value: str):
+        await self.refresh()
+        return await super().set(key, value)
