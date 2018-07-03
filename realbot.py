@@ -79,6 +79,11 @@ async def error_handler(bot: Bot, update: Update, error: Exception):
 async def delete_webhook(*args, **kwargs):
     return True
 
+class MyBot(Bot):
+    def __init__(self, token, *args, **kwargs):
+        self.token = token
+        super().__init__(token=token, *args, **kwargs)
+
 
 class MyDispatcher(Dispatcher):
     def make_message_handler(self, callback, flag: ChatFlag):
@@ -126,7 +131,7 @@ async def main():
     aiogram.dispatcher.webhook._check_ip = lambda: True
 
     for conf in config.BOTS:
-        bot = Bot(token=conf['token'])
+        bot = MyBot(token=conf['token'])
         dispatcher = MyDispatcher(bot)
 
         # set up message handlers
@@ -136,6 +141,7 @@ async def main():
         # admin bot only
         if conf['token'] == config.BOT_TOKEN:
             res = await bot.set_webhook(url=conf['url'])
+            senders.bot = bot
             logger.info('Start webhook for %s returns %s', conf['name'], res)
 
             dispatcher.register_command_handler('exec', admin.execute_command_handler)

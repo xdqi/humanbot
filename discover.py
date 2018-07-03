@@ -103,7 +103,8 @@ async def get_available_bot() -> Bot:
     if len(all_bot - blacklist) < 3:
         return None
 
-    return Bot(token=sample(all_bot - blacklist, 1)[0])
+    from realbot import MyBot
+    return MyBot(token=sample(all_bot - blacklist, 1)[0])
 
 
 CHINESE_REGEX = re.compile(r"[\u4e00-\u9fff]")
@@ -157,7 +158,7 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         report_exception()
         if isinstance(e, RetryAfter):
             logger.warning('bot retry after %s seconds', e.timeout)
-            await bot_info.set(fetcher._Bot__token, get_now_timestamp() + e.timeout)
+            await bot_info.set(fetcher.token, get_now_timestamp() + e.timeout)
         return None, False
 
     if info.type not in [ChatType.SUPER_GROUP, ChatType.CHANNEL]:
