@@ -189,6 +189,10 @@ class OcrWorker(CoroutineWorker):
         else:
             return result
 
+    async def remove_cache(self, path: str):
+        ts, file_id = path.split('-', maxsplit=1)
+        await self.cache.delitem(file_id)
+
     async def do_ocr(self, info: dict):
         client = senders.clients[info['client']]
         buffer = BytesIO()
@@ -253,8 +257,14 @@ class OcrWorker(CoroutineWorker):
             result = cached
         elif cached is True:
             logger.info('ocr %s need retry', record_id)
-            await asyncio.sleep(0.1)
-            await self.queue.put(message)
+            ocr_request['tries'] = ocr_request.get('tries', 0) + 1
+            if ocr_request['tries'] < 100:
+                await asyncio.sleep(0.1)
+                await self.queue.put(to_json(ocr_request))
+            else:
+                ocr_request['tries'] = 0
+                await self.remove_cache(info['filename'])
+                await self.queue.put(to_json(ocr_request))
             return
         elif cached is False:
             ts, file_id = info['filename'].split('-', maxsplit=1)
