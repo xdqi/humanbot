@@ -12,7 +12,7 @@ from telethon.errors import SessionPasswordNeededError
 from telethon import events, TelegramClient
 from telethon.errors import AuthKeyUnregisteredError, PeerIdInvalidError, \
     ChannelPrivateError
-from telethon.tl.types import PeerUser, User, Chat, ChatFull, Channel, ChannelFull
+from telethon.tl.types import PeerUser, User, Chat, ChatFull, Channel, ChannelFull, MessageService
 from telethon.tl.custom.message import Message
 
 import cache
@@ -120,7 +120,7 @@ def update_handler_wrapper(func):
 
 @update_handler_wrapper
 async def update_new_message_handler(event: events.NewMessage.Event):
-    if not isinstance(event.message, Message):
+    if isinstance(event.message, MessageService):
         return
     text = event.text
 
