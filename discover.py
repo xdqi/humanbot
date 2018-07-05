@@ -103,8 +103,10 @@ async def get_available_bot() -> Bot:
     if len(all_bot - blacklist) < 3:
         return None
 
-    from realbot import MyBot
-    return MyBot(token=sample(all_bot - blacklist, 1)[0])
+    token = sample(all_bot - blacklist, 1)[0]
+    uid = int(token.split(':')[0])
+
+    return senders.bots[uid]
 
 
 CHINESE_REGEX = re.compile(r"[\u4e00-\u9fff]")
@@ -152,7 +154,7 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         await asyncio.sleep(0.1)
         info = await fetcher.get_chat('@' + link)
     except ChatNotFound as e:
-        logger.warning('chat not found: %s', e.text)
+        logger.warning('chat not found: @%s', link)
         return None, False
     except (BadRequest, RetryAfter, NetworkError) as e:
         report_exception()
