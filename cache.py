@@ -128,11 +128,11 @@ class RedisDailyDict(RedisDict):
 
     @property
     def today_prefix(self):
-        today = datetime.datetime.now() - datetime.timedelta(hours=6)
+        today = datetime.datetime.now()
         return today.strftime('%Y-%m-%d-')
 
     async def refresh(self):
-        today = datetime.datetime.now() - datetime.timedelta(hours=6)
+        today = datetime.datetime.now()
         if today.hour == 0:
             yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
             await self.r.delete(yesterday.strftime('%Y-%m-%d-') + self.real_name)
