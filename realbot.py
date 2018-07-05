@@ -79,6 +79,7 @@ async def error_handler(bot: Bot, update: Update, error: Exception):
 async def delete_webhook(*args, **kwargs):
     return True
 
+
 class MyBot(Bot):
     def __init__(self, token, *args, **kwargs):
         self.token = token

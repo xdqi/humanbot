@@ -103,10 +103,9 @@ async def get_available_bot() -> Bot:
     if len(all_bot - blacklist) < 3:
         return None
 
+    from realbot import MyBot
     token = sample(all_bot - blacklist, 1)[0]
-    uid = int(token.split(':')[0])
-
-    return senders.bots[uid]
+    return MyBot(token)
 
 
 CHINESE_REGEX = re.compile(r"[\u4e00-\u9fff]")
@@ -162,6 +161,8 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
             logger.warning('bot retry after %s seconds', e.timeout)
             await bot_info.set(fetcher.token, get_now_timestamp() + e.timeout)
         return None, False
+    finally:
+        await fetcher.close()
 
     if info.type not in [ChatType.SUPER_GROUP, ChatType.CHANNEL]:
         return None, False
@@ -176,7 +177,12 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         return gid, False
 
     link = info.username if hasattr(info, 'username') else None
-    count = await fetcher.get_chat_members_count('@' + link)
+    fetcher = await get_available_bot()
+    if fetcher:
+        count = await fetcher.get_chat_members_count('@' + link)
+        await fetcher.close()
+    else:
+        count = 0
     if count < config.GROUP_MEMBER_JOIN_LIMIT:
         logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
         return gid, False
