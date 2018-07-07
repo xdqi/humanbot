@@ -113,8 +113,15 @@ class MyDispatcher(Dispatcher):
 
 
 def make_webhook_handler(dispatcher):
+    from aiogram.utils import context
+    
     class MyWebhookRequestHandler(aiogram.dispatcher.webhook.WebhookRequestHandler):
         def get_dispatcher(self):
+            try:  # aiogram quirks
+                context.set_value('dispatcher', dispatcher)
+                context.set_value('bot', dispatcher.bot)
+            except RuntimeError:
+                pass
             return dispatcher
 
     return MyWebhookRequestHandler
