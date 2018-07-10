@@ -114,7 +114,7 @@ class MyDispatcher(Dispatcher):
 
 def make_webhook_handler(dispatcher):
     from aiogram.utils import context
-    
+
     class MyWebhookRequestHandler(aiogram.dispatcher.webhook.WebhookRequestHandler):
         def get_dispatcher(self):
             try:  # aiogram quirks

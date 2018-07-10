@@ -32,7 +32,7 @@ async def evaluate_script_handler(bot: Bot, message: Message, text: str):
 
 async def join_public_group_handler(bot: Bot, message: Message, text: str):
     logger.info('joining public group %s', text)
-    output = await senders.invoker(JoinChannelRequest(senders.invoker.get_entity(text)))
+    output = await senders.invoker(JoinChannelRequest(await senders.invoker.get_input_entity(text)))
     return str(output)
 
 
