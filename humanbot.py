@@ -179,6 +179,41 @@ async def update_deleted_message_handler(event: events.MessageDeleted.Event):
     await update_group(event.client, event.chat_id)
 
 
+async def notify_when_dead(conf):
+    client = conf['client']
+    await client.run_until_disconnected()
+    msg = f'{conf["name"]}({conf["uid"]}) has disconnected from Telegram server...'
+    logger.error(msg)
+    await send_to_admin_channel(msg)
+
+
+async def client_connect(conf):
+    client = conf['client']  # type: TelegramClient
+
+    logger.info(f'Connecting to Telegram Servers with {conf["name"]}...')
+    await client.connect()
+
+    if not await client.is_user_authorized():
+        logger.info('Unauthorized user')
+        await client.send_code_request(conf["phone_number"])
+        code_ok = False
+        while not code_ok:
+            code = input('Enter the auth code: ')
+            try:
+                code_ok = await client.sign_in(phone=conf["phone_number"], code=code)
+            except SessionPasswordNeededError:
+                password = input('Two step verification enabled. Please enter your password: ')
+                code_ok = await client.sign_in(password=password)
+
+    logger.info(f'Client {conf["name"]} initialized succesfully!')
+
+    client.add_event_handler(update_new_message_handler, events.NewMessage)
+    client.add_event_handler(update_chat_action_handler, events.ChatAction)
+    client.add_event_handler(update_new_message_handler, events.MessageEdited)
+    client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
+    noblock(notify_when_dead(conf))
+
+
 # TODO: add handler to handle UpdateChannel
 
 async def main():
@@ -198,29 +233,7 @@ async def main():
 
     # launch clients
     for conf in config.CLIENTS:
-        client = conf['client']  # type: TelegramClient
-
-        logger.info(f'Connecting to Telegram Servers with {conf["name"]}...')
-        await client.connect()
-
-        if not await client.is_user_authorized():
-            logger.info('Unauthorized user')
-            await client.send_code_request(conf["phone_number"])
-            code_ok = False
-            while not code_ok:
-                code = input('Enter the auth code: ')
-                try:
-                    code_ok = await client.sign_in(phone=conf["phone_number"], code=code)
-                except SessionPasswordNeededError:
-                    password = input('Two step verification enabled. Please enter your password: ')
-                    code_ok = await client.sign_in(password=password)
-
-        logger.info(f'Client {conf["name"]} initialized succesfully!')
-
-        client.add_event_handler(update_new_message_handler, events.NewMessage)
-        client.add_event_handler(update_chat_action_handler, events.ChatAction)
-        client.add_event_handler(update_new_message_handler, events.MessageEdited)
-        client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
+        await client_connect(conf)
 
     # launching bot and workers
     await realbot.main()
