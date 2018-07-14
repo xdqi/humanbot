@@ -16,7 +16,7 @@ aiobotocore
 twilio
 
 aiomysql
-PyMySQL>=0.7.5,<0.9
+PyMySQL
 sqlalchemy
 mysql-connector-python
 aioredis
