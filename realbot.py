@@ -45,7 +45,10 @@ async def message(bot: Bot, msg: Message, flag: ChatFlag):
     text = msg.text
 
     if msg.photo:  # type: List[PhotoSize]
-        text = msg.md_text or msg.caption or ''  # in case of `None`
+        try:
+            text = msg.md_text  # in case of `None`
+        except TypeError:
+            text = ''
         photo = max(msg.photo, key=lambda p: p.file_size)  # type: PhotoSize
         now = datetime.now()
 
