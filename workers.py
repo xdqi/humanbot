@@ -199,8 +199,14 @@ class OcrWorker(CoroutineWorker):
 
         if isinstance(client, TelegramClient):
             location_info = info['location']
-            del location_info['_']
-            del location_info['dc_id']
+            try:
+                del location_info['_']
+            except KeyError:
+                pass
+            try:
+                del location_info['dc_id']
+            except KeyError:
+                pass
             location = InputFileLocation(**location_info)
 
             try:
