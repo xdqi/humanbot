@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"github.com/getsentry/raven-go"
 )
 
 type OcrItem struct {
@@ -24,6 +25,7 @@ func insertMain() {
 	ocrQueue := RedisQueue{"ocr"}
 
 	if err != nil {
+		raven.CaptureErrorAndWait(err, map[string]string{"module": "insert", "func": "start"})
 		logger.Panic(err)
 	}
 
@@ -46,6 +48,7 @@ func insertMain() {
 			for {
 				if err := tx.Create(&chat).Error; err != nil {
 					logger.Printf("insert message error: %v", err)
+					raven.CaptureErrorAndWait(err, map[string]string{"module": "insert", "func": "add"})
 				}
 				break
 			}
@@ -67,6 +70,7 @@ func insertMain() {
 			}
 
 			logger.Printf("insert commit error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "insert", "func": "commit"})
 		}
 	}
 }

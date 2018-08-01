@@ -9,6 +9,7 @@ const RedisOptions = &redis.Options{
 }
 
 const MysqlUrl = "user:pass@tcp(db.example.com)/db"
+const RavenDsn = "https://<key>:<secret>@sentry.io/<project>"
 
 const OcrHint = "--OCR-HINT--"
 const OcrHistoryHint = "--OCR-OLD-HINT--"

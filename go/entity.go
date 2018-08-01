@@ -7,6 +7,7 @@ import (
 	"time"
 	"log"
 	"os"
+	"github.com/getsentry/raven-go"
 )
 
 type EntityItem struct {
@@ -24,6 +25,7 @@ func updateUser(db *gorm.DB, newUser *User) {
 		for {
 			if err := db.Create(&newUser).Error; err != nil {
 				logger.Printf("create user error: %v", err)
+				raven.CaptureErrorAndWait(err, map[string]string{"module": "user", "func": "create"})
 			}
 			break
 		}
@@ -48,6 +50,7 @@ func updateUser(db *gorm.DB, newUser *User) {
 		for {
 			if err := db.Create(&firstHistory).Error; err != nil {
 				logger.Printf("create orig user history error: %v", err)
+				raven.CaptureErrorAndWait(err, map[string]string{"module": "user_history", "func": "create"})
 			}
 			break
 		}
@@ -64,6 +67,7 @@ func updateUser(db *gorm.DB, newUser *User) {
 	for {
 		if err := db.Create(&history).Error; err != nil {
 			logger.Printf("create new user history error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "user_history", "func": "append"})
 		}
 		break
 	}
@@ -74,6 +78,7 @@ func updateUser(db *gorm.DB, newUser *User) {
 	for {
 		if err := db.Save(&user).Error; err != nil {
 			logger.Printf("save modified user error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "user", "func": "save"})
 		}
 		break
 	}
@@ -86,6 +91,7 @@ func updateGroup(db *gorm.DB, newGroup *Group) {
 		for {
 			if err := db.Create(&newGroup).Error; err != nil {
 				logger.Printf("create group error: %v", err)
+				raven.CaptureErrorAndWait(err, map[string]string{"module": "group", "func": "create"})
 			}
 			break
 		}
@@ -97,6 +103,7 @@ func updateGroup(db *gorm.DB, newGroup *Group) {
 		for {
 			if err := db.Save(&group).Error; err != nil {
 				logger.Printf("save group master error: %v", err)
+				raven.CaptureErrorAndWait(err, map[string]string{"module": "group", "func": "save"})
 			}
 			break
 		}
@@ -118,6 +125,7 @@ func updateGroup(db *gorm.DB, newGroup *Group) {
 		for {
 			if err := db.Create(&firstHistory).Error; err != nil {
 				logger.Printf("create orig group history error: %v", err)
+				raven.CaptureErrorAndWait(err, map[string]string{"module": "group_history", "func": "create"})
 			}
 			break
 		}
@@ -132,6 +140,7 @@ func updateGroup(db *gorm.DB, newGroup *Group) {
 	for {
 		if err := db.Create(&history).Error; err != nil {
 			logger.Printf("create new group history error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "group_history", "func": "append"})
 		}
 		break
 	}
@@ -141,6 +150,7 @@ func updateGroup(db *gorm.DB, newGroup *Group) {
 	for {
 		if err := db.Save(&group).Error; err != nil {
 			logger.Printf("save modified group error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "group", "func": "save"})
 		}
 		break
 	}
@@ -153,6 +163,7 @@ func entityMain() {
 	entityQueue := RedisQueue{"entity"}
 
 	if err != nil {
+		raven.CaptureErrorAndWait(err, map[string]string{"module": "entity", "func": "start"})
 		logger.Panic(err)
 	}
 

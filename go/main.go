@@ -2,7 +2,12 @@ package main
 
 import (
 	"os"
+	"github.com/getsentry/raven-go"
 )
+
+func init() {
+	raven.SetDSN(RavenDsn)
+}
 
 func main() {
 	if len(os.Args) > 1 {

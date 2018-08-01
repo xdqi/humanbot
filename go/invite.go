@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"github.com/getsentry/raven-go"
 )
 
 
@@ -18,6 +19,7 @@ func inviteMain() {
 	inviteQueue := RedisQueue{"invite"}
 
 	if err != nil {
+		raven.CaptureErrorAndWait(err, map[string]string{"module": "invite", "func": "start"})
 		logger.Panic(err)
 	}
 
@@ -40,6 +42,7 @@ func inviteMain() {
 			for {
 				if err := tx.Create(&item).Error; err != nil {
 					logger.Printf("add invite error: %v, %v", err, item.ID)
+					raven.CaptureErrorAndWait(err, map[string]string{"module": "invite", "func": "add"})
 					item.ID += 1
 				}
 			}
@@ -57,6 +60,8 @@ func inviteMain() {
 			}
 
 			logger.Printf("invite commit error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "invite", "func": "commit"})
+
 		}
 	}
 }

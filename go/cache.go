@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-redis/redis"
+	"github.com/getsentry/raven-go"
 )
 
 var client = redis.NewClient(RedisOptions)
@@ -20,6 +21,8 @@ func (q RedisQueue) GetBytes() []byte {
 	b, err := client.LPop(q.Name + QueuePrefix).Bytes()
 	if err == redis.Nil {
 		return nil
+	} else if err != nil {
+		raven.CaptureErrorAndWait(err, map[string]string{"module": "cache", "func": "get"})
 	}
 	return b
 }

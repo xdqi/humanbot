@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"github.com/getsentry/raven-go"
 )
 
 
@@ -25,6 +26,7 @@ func markMain() {
 	markQueue := RedisQueue{"mark"}
 
 	if err != nil {
+		raven.CaptureErrorAndWait(err, map[string]string{"module": "mark", "func": "start"})
 		logger.Panic(err)
 	}
 
@@ -55,6 +57,7 @@ func markMain() {
 					}
 					if newMsg, err := json.Marshal(item); err != nil {
 						logger.Printf("insert mark message back error: %v", err)
+						raven.CaptureErrorAndWait(err, map[string]string{"module": "mark", "func": "insert"})
 						break
 					} else {
 						markQueue.PutBytes(newMsg)
@@ -66,6 +69,7 @@ func markMain() {
 
 				if err != nil {
 					logger.Printf("mark query error: %v", err)
+					raven.CaptureErrorAndWait(err, map[string]string{"module": "mark", "func": "query"})
 				}
 				break
 			}
@@ -81,6 +85,7 @@ func markMain() {
 			}
 
 			logger.Printf("mark commit error: %v", err)
+			raven.CaptureErrorAndWait(err, map[string]string{"module": "mark", "func": "commit"})
 		}
 	}
 }
