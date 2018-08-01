@@ -10,6 +10,8 @@ from aiogram.types import Message
 
 import senders
 import utils
+import discover
+import models
 
 
 logger = getLogger(__name__)
@@ -33,7 +35,8 @@ async def evaluate_script_handler(bot: Bot, message: Message, text: str):
 
 async def join_public_group_handler(bot: Bot, message: Message, text: str):
     logger.info('joining public group %s', text)
-    output = await senders.invoker(JoinChannelRequest(await senders.invoker.get_input_entity(text)))
+    engine = await models.get_aio_engine()
+    output = await discover.test_and_join_public_channel(engine, text)
     return str(output)
 
 

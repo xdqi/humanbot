@@ -101,6 +101,14 @@ session_factory = sessionmaker(bind=engine)
 Session = scoped_session(session_factory)
 
 
+async def get_aio_engine():
+    import aiomysql.sa
+    return await aiomysql.sa.create_engine(**config.MYSQL_CONFIG,
+                                           db=config.MYSQL_DATABASE,
+                                           charset='utf8mb4',
+                                           autocommit=True)
+
+
 async def update_user_real(user_id, first_name, last_name, username, lang_code):
     """
     Update user information to database

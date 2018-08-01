@@ -103,10 +103,7 @@ class CoroutineWorker(metaclass=WorkProperties):
 
     async def run(self):
         logger.info('%s worker has started', self.name)
-        engine = await aiomysql.sa.create_engine(**config.MYSQL_CONFIG,
-                                                 db=config.MYSQL_DATABASE,
-                                                 charset='utf8mb4',
-                                                 autocommit=True)
+        engine = await models.get_aio_engine()
 
         while True:
             try:

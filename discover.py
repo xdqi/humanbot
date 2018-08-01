@@ -12,7 +12,7 @@ from aiogram.utils.exceptions import BadRequest, RetryAfter, NetworkError, ChatN
 
 from telethon.errors import InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelsTooMuchError
 from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.functions.messages import CheckChatInviteRequest, GetHistoryRequest
+from telethon.tl.functions.messages import CheckChatInviteRequest, GetHistoryRequest, ImportChatInviteRequest
 from telethon.tl.types import ChatInvite
 
 import aiomysql.sa
@@ -61,44 +61,11 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
 
     for link in private_links:
         invite_hash = link[-22:]
-        uid, gid, rand = extract_uid_gid_from_link(invite_hash)
-        if gid > 1000000000:  # supergroup or channel
-            gid = int('-100' + str(gid))
-        else:  # normal group
-            gid = -gid
         if await recent_found_links.contains(invite_hash):
             continue
         await recent_found_links.add(invite_hash)
 
-        async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
-            stmt = models.Core.GroupInvite.select().where(models.GroupInvite.invite == invite_hash)
-            records = await conn.execute(stmt)
-            if records.rowcount:
-                continue
-
-        try:
-            group = await senders.invoker(CheckChatInviteRequest(invite_hash))
-        except (InviteHashExpiredError, InviteHashInvalidError) as e:
-            report_exception()
-            continue
-        except FloodWaitError as e:
-            logger.warning('Unable to resolve now, %r', e)
-            continue
-
-        await models.update_group_invite(gid, uid, rand, invite_hash, group.title)
-
-        async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
-            stmt = models.Core.Group.select().where(models.Group.gid == gid)
-            records = await conn.execute(stmt)
-            if records.rowcount:
-                continue
-
-        if isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
-            await send_to_admin_channel('invitation from {} (gid {}): {}, {} members\n'
-                                        'Join {} with /joinprv {}'.format(
-                link, gid, group.title, group.participants_count,
-                'channel' if group.broadcast else 'group', link[-22:]
-            ))
+        await test_and_join_private_channel(engine, invite_hash, False)
 
 
 bot_info = cache.RedisDict('bot_info')
@@ -227,6 +194,46 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         await conn.execute('COMMIT')
 
     return gid, joined
+
+
+async def test_and_join_private_channel(engine, invite_hash, join_now):
+    uid, gid, rand = extract_uid_gid_from_link(invite_hash)
+    if gid > 1000000000:  # supergroup or channel
+        gid = int('-100' + str(gid))
+    else:  # normal group
+        gid = -gid
+
+    async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
+        stmt = models.Core.GroupInvite.select().where(models.GroupInvite.invite == invite_hash)
+        records = await conn.execute(stmt)
+        if records.rowcount:
+            return gid, False
+
+    try:
+        group = await senders.invoker(CheckChatInviteRequest(invite_hash))
+    except (InviteHashExpiredError, InviteHashInvalidError) as e:
+        report_exception()
+        return None, False
+    except FloodWaitError as e:
+        logger.warning('Unable to resolve now, %r', e)
+        return None, False
+
+    await models.update_group_invite(gid, uid, rand, invite_hash, group.title)
+
+    async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
+        stmt = models.Core.Group.select().where(models.Group.gid == gid)
+        records = await conn.execute(stmt)
+        if records.rowcount:
+            return gid, False
+
+    if join_now:
+        await senders.invoker(ImportChatInviteRequest(invite_hash))
+        msg = 'I have joined {}'.format('channel' if group.broadcast else 'group')
+    elif isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
+        msg = 'Join {} with /joinprv {}'.format('channel' if group.broadcast else 'group', invite_hash)
+
+    await send_to_admin_channel('invitation from t.me/joinchat/{} (gid {}): {}, {} members\n'
+                                .format(invite_hash, gid, group.title, group.participants_count) + msg)
 
 
 async def find_link_enqueue(msg: str):
