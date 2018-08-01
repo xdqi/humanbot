@@ -83,7 +83,7 @@ class FakeCursor:
 def connect(filename, check_same_thread):
     if filename == ':memory:':
         return sqlite3.connect(filename, check_same_thread=check_same_thread)
-    conn = mysql.connector.connect(**config.MYSQL_CONFIG, database=config.MYSQL_SESSION_DB_PREFIX + filename[:-8])
+    conn = mysql.connector.connect(**config.MYSQL_CONFIG, use_pure=True, database=config.MYSQL_SESSION_DB_PREFIX + filename[:-8])
     return FakeConnection(conn)
 
 
