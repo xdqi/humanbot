@@ -66,12 +66,12 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
             gid = int('-100' + str(gid))
         else:  # normal group
             gid = -gid
-        if await recent_found_links.contains(str(gid)):
+        if await recent_found_links.contains(invite_hash):
             continue
-        await recent_found_links.add(str(gid))
+        await recent_found_links.add(invite_hash)
 
         async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
-            stmt = models.Core.Group.select().where(models.Group.gid == gid)
+            stmt = models.Core.GroupInvite.select().where(models.GroupInvite.invite == invite_hash)
             records = await conn.execute(stmt)
             if records.rowcount:
                 continue
@@ -84,6 +84,15 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
         except FloodWaitError as e:
             logger.warning('Unable to resolve now, %r', e)
             continue
+
+        await models.update_group_invite(gid, uid, rand, invite_hash, group.title)
+
+        async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
+            stmt = models.Core.Group.select().where(models.Group.gid == gid)
+            records = await conn.execute(stmt)
+            if records.rowcount:
+                continue
+
         if isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
             await send_to_admin_channel('invitation from {} (gid {}): {}, {} members\n'
                                         'Join {} with /joinprv {}'.format(

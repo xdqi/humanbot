@@ -12,6 +12,8 @@ func main() {
 			entityMain()
 		} else if os.Args[1] == "--mark" {
 			markMain()
+		} else if os.Args[1] == "--invite" {
+			inviteMain()
 		}
 	}
 }

@@ -5,6 +5,7 @@ import traceback
 from logging import getLogger
 from cProfile import Profile
 from datetime import datetime, timedelta
+from concurrent.futures import CancelledError
 
 from telethon import TelegramClient
 from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
@@ -117,7 +118,7 @@ class CoroutineWorker(metaclass=WorkProperties):
                 await self.queue.task_done()
                 await self.status.set('last', get_now_timestamp())
                 await self.status.set('size', await self.queue.qsize())
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, CancelledError):
                 await self.queue.put(message)
                 break
             except BaseException as e:
@@ -421,6 +422,18 @@ class FetchHistoryWorker(CoroutineWorker):
         return basic + await cls.status.repr()
 
 
+class InviteWorker(CoroutineWorker):
+    name = 'invite'
+
+    async def handler(self, engine: aiomysql.sa.Engine, message: str):
+        info = from_json(message)
+
+        async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
+            stmt = models.Core.GroupInvite.insert().values(**info)
+            await conn.execute(stmt)
+            await conn.execute('COMMIT')
+
+
 async def history_add_handler(bot, update, text):
     content = to_json(dict(gid=int(text)))
     await FetchHistoryWorker.queue.put(content)
@@ -433,4 +446,5 @@ async def workers_handler(bot, update, text):
            await FindLinkWorker.stat() + \
            await OcrWorker.stat() + \
            await EntityUpdateWorker.stat() + \
+           await InviteWorker.stat() + \
            await FetchHistoryWorker.stat()

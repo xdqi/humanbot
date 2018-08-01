@@ -243,6 +243,7 @@ async def main():
     # workers.MessageMarkWorker().start()
     workers.FetchHistoryWorker().start()
     workers.OcrWorker().start(4)
+    workers.InviteWorker().start()
     noblock(httpd.main())
 
     # for debugging

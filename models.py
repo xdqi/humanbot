@@ -83,6 +83,17 @@ class GroupHistory(Base):
     date = Column('date', Integer, index=True)
 
 
+class GroupInvite(Base):
+    __tablename__ = 'group_invites'
+    id = Column('id', Integer(), primary_key=True, autoincrement=True)
+    gid = Column('gid', BigInteger(), index=True)
+    creator = Column('creator', Integer(), index=True)
+    secret = Column('secret', BigInteger(), index=True)
+    invite = Column('invite', String(22), index=True, unique=True)
+    name = Column('name', String(100))
+    date = Column('date', Integer, index=True)
+
+
 engine = engine_from_config(config.DB_CONFIG, echo=not config.PRODUCTION)
 
 session_factory = sessionmaker(bind=engine)
@@ -174,6 +185,18 @@ async def update_group_real(master_uid, chat_id, name, link):
     )))
 
 
+async def update_group_invite(gid, creator, secret, invite, name):
+    from workers import InviteWorker
+    await InviteWorker.queue.put(utils.to_json(dict(
+        gid=gid,
+        creator=creator,
+        secret=secret,
+        invite=invite,
+        name=name,
+        date=utils.get_now_timestamp()
+    )))
+
+
 def update_group(session, master_uid, chat_id, name, link):
     logger.debug('group %s %s %s', chat_id, name, link)
 
@@ -232,6 +255,7 @@ async def insert_message_local_timezone(chat_id, message_id, user_id, msg, date:
 class Core:
     ChatNew = Base.metadata.tables['chat_new']  # type: Table
     Group = Base.metadata.tables['groups']  # type: Table
+    GroupInvite = Base.metadata.tables['group_invites']  # type: Table
 
 
 if __name__ == '__main__':

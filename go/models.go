@@ -72,3 +72,17 @@ type GroupHistory struct {
 func (GroupHistory) TableName() string {
 	return "group_history"
 }
+
+type GroupInvite struct {
+	ID      int    `gorm:"column:id;AUTO_INCREMENT;primary_key" json:"id,omitempty"`
+	GID     int64  `gorm:"column:gid" json:"gid"`
+	Creator int
+	Secret  int64
+	Invite  string `gorm:"size:22;unique"`
+	Name    string `gorm:"size:100"`
+	Date    int
+}
+
+func (GroupInvite) TableName() string {
+	return "group_invites"
+}
