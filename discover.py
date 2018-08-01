@@ -231,6 +231,8 @@ async def test_and_join_private_channel(engine, invite_hash, join_now):
         msg = 'I have joined {}'.format('channel' if group.broadcast else 'group')
     elif isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
         msg = 'Join {} with /joinprv {}'.format('channel' if group.broadcast else 'group', invite_hash)
+    else:
+        return gid, False
 
     await send_to_admin_channel('invitation from t.me/joinchat/{} (gid {}): {}, {} members\n'
                                 .format(invite_hash, gid, group.title, group.participants_count) + msg)

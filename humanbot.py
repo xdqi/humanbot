@@ -19,7 +19,7 @@ import cache
 import config
 from models import update_user_real, update_group_real, insert_message_local_timezone, ChatFlag
 from utils import get_now_timestamp, send_to_admin_channel, report_exception, \
-    peer_to_internal_id, need_to_be_online, get_photo_address, to_json, block, noblock
+    peer_to_internal_id, need_to_be_online, get_photo_address, to_json, block, noblock, aiohttp_init
 import session
 import senders
 import httpd
@@ -230,6 +230,7 @@ async def main():
     await global_count.set('received_message', 0)
     await global_count.set('total_used_time', 0)
     await global_count.set('start_time', get_now_timestamp())
+    await aiohttp_init()
 
     # launch clients
     for conf in config.CLIENTS:

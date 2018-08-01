@@ -27,15 +27,29 @@ logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=AioHttpTransport)
 
 
+async def aiohttp_init():
+    global aiohttp_session, aiobotocore_client
+    aiohttp_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+
+    session = aiobotocore.get_session()
+    protocol = 'https://' if config.MINIO_SECURE else 'http://'
+    aiobotocore_client = session.create_client('s3',
+                                               endpoint_url=protocol + config.MINIO_SERVER,
+                                               aws_secret_access_key=config.MINIO_SECRET_KEY,
+                                               aws_access_key_id=config.MINIO_ACCESS_KEY,
+                                               config=botocore.config.Config(signature_version='s3v4'))
+
+
+class OcrError(BaseException):
+    pass
+
+
 async def wget_retry(url, remaining_retry=5):
     if remaining_retry == 0:
-        traceback.print_exc()
-        return {}
+        raise OcrError
     try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as resp:
-                return await resp.json(content_type=None, encoding='utf-8')
+        async with aiohttp_session.get(url) as resp:
+            return await resp.json(content_type=None, encoding='utf-8')
     except (aiohttp.ServerTimeoutError, asyncio.TimeoutError):
         return await wget_retry(url, remaining_retry - 1)
 
@@ -53,18 +67,11 @@ async def upload_local(buffer: BytesIO, root, path, filename) -> str:
 
 async def upload_minio(buffer: BytesIO, path, filename) -> str:
     url_path = '{}/{}'.format(path, filename)
-    session = aiobotocore.get_session()
-    protocol = 'https://' if config.MINIO_SECURE else 'http://'
-    async with session.create_client('s3',
-                                     endpoint_url=protocol + config.MINIO_SERVER,
-                                     aws_secret_access_key=config.MINIO_SECRET_KEY,
-                                     aws_access_key_id=config.MINIO_ACCESS_KEY,
-                                     config=botocore.config.Config(signature_version='s3v4')) as client:
-        await client.put_object(Bucket=config.MINIO_BUCKET,
-                                Key=url_path,
-                                Body=buffer,
-                                ContentLength=buffer.getbuffer().nbytes
-                                )
+    await aiobotocore_client.put_object(Bucket=config.MINIO_BUCKET,
+                                        Key=url_path,
+                                        Body=buffer,
+                                        ContentLength=buffer.getbuffer().nbytes
+                                        )
     return url_path
 
 
@@ -99,7 +106,7 @@ def tg_html_entity(s: str) -> str:
     return s
 
 
-async def send_to(chat: int, msg: str, strip: bool=True):
+async def send_to(chat: int, msg: str, strip: bool = True):
     logger.info('Sending to administrators: \n%s', msg)
     msg = tg_html_entity(msg)
     if strip and len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
@@ -170,7 +177,7 @@ async def need_to_be_online():
         await global_count.set('online_time', get_random_time(config.ONLINE_HOUR))
         await global_count.set('offline_time', get_random_time(config.OFFLINE_HOUR))
 
-    if int(await global_count['online_time']) < get_now_timestamp() < int(await global_count['offline_time']) and\
+    if int(await global_count['online_time']) < get_now_timestamp() < int(await global_count['offline_time']) and \
             randint(0, 10) == 5:
         return True
     return False

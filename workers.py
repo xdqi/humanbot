@@ -23,7 +23,7 @@ import models
 import realbot
 import senders
 from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
-    send_to_admin_channel, noblock, block
+    send_to_admin_channel, noblock, block, OcrError
 
 logger = getLogger(__name__)
 
@@ -273,8 +273,9 @@ class OcrWorker(CoroutineWorker):
         elif cached is False:
             ts, file_id = info['filename'].split('-', maxsplit=1)
             await self.cache.set(file_id, config.OCR_PROCESSING_HINT)
-            result = await self.do_ocr(info)
-            if result is None:
+            try:
+                result = await self.do_ocr(info)
+            except OcrError:
                 result = config.OCR_FAILED_HINT + '\n' + to_json(info)
             await self.cache.set(file_id, result)
             logger.info('ocr %s complete', record_id)
