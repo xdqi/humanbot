@@ -4,6 +4,7 @@ from logging import getLogger
 
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
+from telethon.errors import InviteHashInvalidError, FloodWaitError
 from aiogram import Bot
 from aiogram.types import Message
 
@@ -37,7 +38,11 @@ async def join_public_group_handler(bot: Bot, message: Message, text: str):
 
 
 async def join_private_group_handler(bot: Bot, message: Message, text: str):
-    output = await senders.invoker(ImportChatInviteRequest(text))
+    try:
+        output = await senders.invoker(ImportChatInviteRequest(text))
+    except (InviteHashInvalidError, FloodWaitError) as e:
+        output = str(type(e)) + ':' + repr(e)
+
     return str(output)
 
 
