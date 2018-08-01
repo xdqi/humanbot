@@ -27,7 +27,7 @@ logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=AioHttpTransport)
 
 
-async def wget_retry(url, remaining_retry=1):
+async def wget_retry(url, remaining_retry=5):
     if remaining_retry == 0:
         traceback.print_exc()
         return {}
@@ -36,7 +36,7 @@ async def wget_retry(url, remaining_retry=1):
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as resp:
                 return await resp.json(content_type=None, encoding='utf-8')
-    except aiohttp.ServerTimeoutError:
+    except (aiohttp.ServerTimeoutError, asyncio.TimeoutError):
         return await wget_retry(url, remaining_retry - 1)
 
 
