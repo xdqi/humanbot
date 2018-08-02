@@ -13,7 +13,7 @@ from aiogram.utils.exceptions import BadRequest, RetryAfter, NetworkError, ChatN
 from telethon.errors import InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelsTooMuchError
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import CheckChatInviteRequest, GetHistoryRequest, ImportChatInviteRequest
-from telethon.tl.types import ChatInvite
+from telethon.tl.types import ChatInvite, ChatInviteAlready
 
 import aiomysql.sa
 import sqlalchemy
@@ -22,8 +22,9 @@ import cache
 import config
 import models
 import senders
+import workers
 from utils import report_exception, send_to_admin_channel, \
-    get_now_timestamp, tg_html_entity
+    get_now_timestamp, tg_html_entity, to_json
 
 logger = getLogger(__name__)
 
@@ -86,6 +87,8 @@ async def get_available_bot() -> Bot:
 
 CHINESE_REGEX = re.compile(r"[\u4e00-\u9fff]")
 def is_chinese_message(message: str):
+    if not message:
+        return False
     return bool(CHINESE_REGEX.findall(message))
 
 
@@ -114,10 +117,11 @@ Messages: {[m.message if hasattr(m, 'message') else '' for m in result.messages]
     return chinese_count > ceil(all_count / 10)
 
 
-async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int, bool):
+async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link: str, join_now: bool=False) -> (int, bool):
     """
-    :param session: SQLAlchemy session
+    :param engine: SQLAlchemy aio MySQL engine
     :param link: public link (like im91yun)
+    :param join_now: join the group regardless of chinese and member count limit
     :return: bool: if joined the group/channel
     """
     gid = None
@@ -159,7 +163,7 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
         await fetcher.close()
     else:
         count = 0
-    if count < config.GROUP_MEMBER_JOIN_LIMIT:
+    if not join_now and count < config.GROUP_MEMBER_JOIN_LIMIT:
         logger.warning(f'Group @{link} has {count} < {config.GROUP_MEMBER_JOIN_LIMIT} members, skip')
         return gid, False
 
@@ -168,21 +172,17 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link) -> (int
     except FloodWaitError as e:
         logger.warning('Get group via username flooded. %r', e)
         return gid, False
-    if (info.title and is_chinese_message(info.title)) or \
+    if join_now or \
+       (info.title and is_chinese_message(info.title)) or \
        (info.description and is_chinese_message(info.description)) or \
-       await is_chinese_group(group, info):  # we do it after logging it to our system
-        global_count = cache.RedisDict('global_count')
-        try:
-            await senders.invoker(JoinChannelRequest(group))
-            await global_count.set('full', '0')
-        except ChannelsTooMuchError:
-            if await global_count['full'] == '0':
-                await send_to_admin_channel('Too many groups! It\'s time to sign up for a new account')
-                await global_count.set('full', '1')
-            return gid, False
-        await send_to_admin_channel(f'joined public {info.type}: {tg_html_entity(info.title)}(@{link})\n'
-                                       f'members: {count}\n'
-                              )
+       await is_chinese_group(group, info):
+        await workers.JoinGroupWorker.queue.put(to_json(dict(
+            link_type='public',
+            link=link,
+            group_type=info.type,
+            title=info.title,
+            count=count
+        )))
         joined = True
 
     async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
@@ -218,6 +218,8 @@ async def test_and_join_private_channel(engine, invite_hash, join_now):
         logger.warning('Unable to resolve now, %r', e)
         return None, False
 
+    if isinstance(group, ChatInviteAlready):
+        group = group.chat
     await models.update_group_invite(gid, uid, rand, invite_hash, group.title)
 
     async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
@@ -227,9 +229,16 @@ async def test_and_join_private_channel(engine, invite_hash, join_now):
             return gid, False
 
     if join_now:
-        await senders.invoker(ImportChatInviteRequest(invite_hash))
-        msg = 'I have joined {}'.format('channel' if group.broadcast else 'group')
-    elif isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
+        await workers.JoinGroupWorker.queue.put(to_json(dict(
+            link_type='private',
+            link=invite_hash,
+            group_type='channel' if group.broadcast else 'group',
+            title=group.title,
+            count=group.participants_count
+        )))
+        return gid, True
+
+    if isinstance(group, ChatInvite) and group.participants_count > config.GROUP_MEMBER_JOIN_LIMIT:
         msg = 'Join {} with /joinprv {}'.format('channel' if group.broadcast else 'group', invite_hash)
     else:
         return gid, False

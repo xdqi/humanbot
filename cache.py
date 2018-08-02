@@ -74,6 +74,9 @@ class RedisQueue(RedisObject):
             return
         return val.decode('utf-8')
 
+    async def insert(self, value: str):
+        await self.r.lpush(self.name, value)
+
     async def put(self, value: str):
         await self.r.rpush(self.name, value)
 

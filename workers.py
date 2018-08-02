@@ -8,10 +8,12 @@ from datetime import datetime, timedelta
 from concurrent.futures import CancelledError
 
 from telethon import TelegramClient
-from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
+from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto, ChatInvite
 from telethon.extensions import markdown
 from telethon.errors import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
-    RpcCallFailError
+    RpcCallFailError, ChannelsTooMuchError
 from aiogram import Bot
 
 import aiomysql.sa
@@ -23,7 +25,7 @@ import models
 import realbot
 import senders
 from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
-    send_to_admin_channel, noblock, block, OcrError
+    send_to_admin_channel, noblock, block, OcrError, tg_html_entity
 
 logger = getLogger(__name__)
 
@@ -430,6 +432,54 @@ class InviteWorker(CoroutineWorker):
             stmt = models.Core.GroupInvite.insert().values(**info)
             await conn.execute(stmt)
             await conn.execute('COMMIT')
+
+
+class JoinGroupWorker(CoroutineWorker):
+    name = 'join'
+    wait_until = 0
+
+    async def handler(self, engine: aiomysql.sa.Engine, message: str):
+        self.wait_until = 0
+
+        info = from_json(message)
+        link_type = info['link_type']
+        link = info['link']
+        group_type = info['group_type']
+        title = info['title']
+        count = info['count']
+        if link_type == 'public':
+            try:
+                group = await senders.invoker.get_input_entity(link)  # type: InputChannel
+            except FloodWaitError as e:
+                logger.warning('Get group via username flooded. %r', e)
+                await self.queue.put(message)
+                return
+
+        global_count = cache.RedisDict('global_count')
+        try:
+            if link_type == 'public':
+                await senders.invoker(JoinChannelRequest(group))
+                full_link = '@' + link
+            elif link_type == 'private':
+                await senders.invoker(ImportChatInviteRequest(link))
+                full_link = 't.me/joinchat/' + link
+
+            await send_to_admin_channel(f'joined {link_type} {group_type}\n'
+                                        f'{tg_html_entity(title)} ({full_link})\n'
+                                        f'members: {count}'
+                                        )
+            await global_count.set('full', '0')
+        except ChannelsTooMuchError:
+            if await global_count['full'] == '0':
+                await send_to_admin_channel('Too many groups! It\'s time to sign up for a new account')
+                await global_count.set('full', '1')
+            return
+        except FloodWaitError as e:
+            await self.queue.put(message)
+            self.wait_until = get_now_timestamp() + e.seconds
+            await send_to_admin_channel(f'Join group triggered flood, sleeping for {e.seconds} seconds.')
+            await asyncio.sleep(e.seconds)
+            return
 
 
 async def history_add_handler(bot, update, text):

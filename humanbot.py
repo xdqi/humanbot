@@ -245,6 +245,7 @@ async def main():
     workers.FetchHistoryWorker().start()
     workers.OcrWorker().start(4)
     workers.InviteWorker().start()
+    workers.JoinGroupWorker().start()
     noblock(httpd.main())
 
     # for debugging
