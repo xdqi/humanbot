@@ -249,9 +249,5 @@ async def test_and_join_private_channel(engine, invite_hash, join_now):
 
 async def find_link_enqueue(msg: str):
     from workers import FindLinkWorker
-    if await FindLinkWorker.queue.qsize() > 50:
-        await send_to_admin_channel('Find link queue full, worker dead?')
-        FindLinkWorker().start()
-        return
     if msg:
         await FindLinkWorker.queue.put(msg)
