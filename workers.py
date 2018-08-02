@@ -495,4 +495,5 @@ async def workers_handler(bot, update, text):
            await OcrWorker.stat() + \
            await EntityUpdateWorker.stat() + \
            await InviteWorker.stat() + \
+           await JoinGroupWorker.stat() + \
            await FetchHistoryWorker.stat()
