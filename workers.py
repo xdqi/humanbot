@@ -18,6 +18,7 @@ from aiogram import Bot
 
 import aiomysql.sa
 import sqlalchemy
+from aioinflux import InfluxDBClient
 
 import cache
 import config
@@ -25,7 +26,7 @@ import models
 import realbot
 import senders
 from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
-    send_to_admin_channel, noblock, block, OcrError, tg_html_entity
+    send_to_admin_channel, noblock, block, OcrError, tg_html_entity, report_statistics
 
 logger = getLogger(__name__)
 
@@ -229,6 +230,12 @@ class OcrWorker(CoroutineWorker):
 
         buffer.seek(0)
         full_path = await upload_pic(buffer, info['path'], info['filename'])
+
+        await report_statistics(measurement='bot',
+                                tags={'master': info['client'],
+                                      'type': 'ocr'},
+                                fields={'count': 1})
+
         return await ocr(full_path)
 
     async def handler(self, engine: aiomysql.sa.Engine, message: str):
@@ -337,6 +344,7 @@ class FetchHistoryWorker(CoroutineWorker):
             row = await records.fetchone()
 
         master = row.master
+        self.master = row.master
         name = row.name
         link = row.link
         self.first = row.min_message_id
@@ -397,6 +405,11 @@ class FetchHistoryWorker(CoroutineWorker):
                 result = await get_photo_address(client, msg.media)
                 text = config.OCR_HISTORY_HINT + '\n' + result + '\n' + text
 
+            await report_statistics(measurement='bot',
+                                    tags={'master': self.master,
+                                          'type': 'history'},
+                                    fields={'count': 1})
+
             await models.insert_message_local_timezone(gid, msg.id, msg.from_id, text, msg.date)
             if msg.input_sender is not None:  # type: User
                 await models.update_user_real(
@@ -427,6 +440,10 @@ class InviteWorker(CoroutineWorker):
 
     async def handler(self, engine: aiomysql.sa.Engine, message: str):
         info = from_json(message)
+
+        await report_statistics(measurement='bot',
+                                tags={'type': 'invite'},
+                                fields={'count': 1})
 
         async with engine.acquire() as conn:  # type: aiomysql.sa.SAConnection
             stmt = models.Core.GroupInvite.insert().values(**info)
@@ -464,6 +481,10 @@ class JoinGroupWorker(CoroutineWorker):
                 await senders.invoker(ImportChatInviteRequest(link))
                 full_link = 't.me/joinchat/' + link
 
+            await report_statistics(measurement='bot',
+                                    tags={'type': 'join',
+                                          'group_type': link_type},
+                                    fields={'count': 1})
             await send_to_admin_channel(f'joined {link_type} {group_type}\n'
                                         f'{tg_html_entity(title)} ({full_link})\n'
                                         f'members: {count}'
@@ -482,6 +503,47 @@ class JoinGroupWorker(CoroutineWorker):
             return
 
 
+class ReportStatisticsWorker(CoroutineWorker):
+    name = 'report'
+    global_statistics = cache.RedisDict('global_statistics')
+
+    async def run(self):
+        logger.info('%s worker has started', self.name)
+
+        self.influxdb_client = InfluxDBClient(**config.INFLUXDB_CONFIG)
+        if config.INFLUXDB_URL:
+            self.influxdb_client._url = config.INFLUXDB_URL
+
+        while True:
+            try:
+                await self.report()
+                await self.status.set('last', get_now_timestamp())
+                await asyncio.sleep(30)
+            except (KeyboardInterrupt, CancelledError):
+                await self.influxdb_client.close()
+                break
+            except:
+                traceback.print_exc()
+                report_exception()
+                continue
+
+    async def report(self):
+        for k, v in await self.global_statistics.items():
+            await self.global_statistics.set(k, 0)
+
+            measurement, tags_ = k.split('|', maxsplit=1)
+            tags = from_json(tags_)
+            key = tags['key']
+            del tags['key']
+
+            await self.influxdb_client.write(dict(
+                time=datetime.now(),
+                measurement=measurement,
+                tags=tags,
+                fields={key: v}
+            ))
+
+
 async def history_add_handler(bot, update, text):
     content = to_json(dict(gid=int(text)))
     await FetchHistoryWorker.queue.put(content)
@@ -496,4 +558,5 @@ async def workers_handler(bot, update, text):
            await EntityUpdateWorker.stat() + \
            await InviteWorker.stat() + \
            await JoinGroupWorker.stat() + \
-           await FetchHistoryWorker.stat()
+           await FetchHistoryWorker.stat() + \
+           await ReportStatisticsWorker.stat()

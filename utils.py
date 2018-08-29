@@ -26,7 +26,6 @@ import senders
 logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=AioHttpTransport)
 
-
 async def aiohttp_init():
     global aiohttp_session, aiobotocore_client
     aiohttp_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
@@ -199,9 +198,18 @@ async def get_photo_address(client: TelegramClient, media: MessageMediaPhoto):
     ))
 
 
+async def report_statistics(measurement: str, tags: dict, fields: dict):
+    global_statistics = cache.RedisDict('global_statistics')
+
+    for k, v in fields.items():
+        new_tags = tags.copy()
+        new_tags['key'] = k
+        await global_statistics.incrby(measurement + '|' + to_json(new_tags), v)
+
+
 def block(c):
     return asyncio.get_event_loop().run_until_complete(c)
 
 
 def noblock(c):
-    asyncio.ensure_future(c)
+    asyncio.get_event_loop().create_task(c)

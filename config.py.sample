@@ -84,3 +84,10 @@ DB_CONFIG = {
     # 'sqlalchemy.url': 'mysql://user:pass@db.example.com/db' # if you prefer MySQL
 }
 REDIS_URL = 'redis://localhost:6379/0'
+
+INFLUXDB_CONFIG = {
+    'db': 'influxdb',
+    'host': '127.0.0.1',
+    'port': '8086'
+}
+INFLUXDB_URL = ''

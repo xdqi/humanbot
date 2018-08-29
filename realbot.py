@@ -16,7 +16,7 @@ import config
 import workers
 import senders
 import discover
-from utils import report_exception, get_now_timestamp, send_to_admin_channel, to_json
+from utils import report_exception, get_now_timestamp, send_to_admin_channel, to_json, report_statistics
 import cache
 from models import update_user_real, update_group_real, insert_message, ChatFlag
 import admin
@@ -67,6 +67,10 @@ async def message(bot: Bot, msg: Message, flag: ChatFlag):
     else:
         uid = None
 
+    await report_statistics(measurement='bot',
+                            tags={'master': str((await bot.me).id),
+                                  'type': 'insert'},
+                            fields={'count': 1})
     await insert_message(msg.chat.id, msg.message_id, uid, text, msg.date, flag, find_link=False)
     await discover.find_link_enqueue(msg.text)
     await update_group(bot, msg.chat.id)

@@ -24,7 +24,7 @@ import models
 import senders
 import workers
 from utils import report_exception, send_to_admin_channel, \
-    get_now_timestamp, tg_html_entity, to_json
+    get_now_timestamp, tg_html_entity, to_json, report_statistics
 
 logger = getLogger(__name__)
 
@@ -56,6 +56,11 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
             logger.warning(f'Group @{link} is in recent found links, skip')
             continue
         await recent_found_links.add(link)
+
+        await report_statistics(measurement='bot',
+                                tags={'type': 'discover',
+                                      'group_type': 'public'},
+                                fields={'count': 1})
         gid, joined = await test_and_join_public_channel(engine, link)
         if joined:
             await group_last_changed.add(str(gid))
@@ -66,6 +71,10 @@ async def find_link_to_join(engine: aiomysql.sa.Engine, msg: str):
             continue
         await recent_found_links.add(invite_hash)
 
+        await report_statistics(measurement='bot',
+                                tags={'type': 'discover',
+                                      'group_type': 'private'},
+                                fields={'count': 1})
         await test_and_join_private_channel(engine, invite_hash, False)
 
 

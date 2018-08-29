@@ -19,7 +19,7 @@ import cache
 import config
 from models import update_user_real, update_group_real, insert_message_local_timezone, ChatFlag
 from utils import get_now_timestamp, send_to_admin_channel, report_exception, \
-    peer_to_internal_id, need_to_be_online, get_photo_address, to_json, block, noblock, aiohttp_init
+    peer_to_internal_id, need_to_be_online, get_photo_address, to_json, block, noblock, aiohttp_init, report_statistics
 import session
 import senders
 import httpd
@@ -132,6 +132,10 @@ async def update_new_message_handler(event: events.NewMessage.Event):
         result = await get_photo_address(event.client, event.media)
         text = config.OCR_HINT + '\n' + result + '\n' + event.text
 
+    await report_statistics(measurement='bot',
+                            tags={'master': (await event.client.get_me(input_peer=True)).user_id,
+                                  'type': 'insert'},
+                            fields={'count': 1})
     await insert_message_local_timezone(event.chat_id, event.message.id, event.sender_id, text, event.message.date, flag)
     await find_link_enqueue(event.raw_text)
 
@@ -246,6 +250,7 @@ async def main():
     workers.OcrWorker().start(4)
     workers.InviteWorker().start()
     workers.JoinGroupWorker().start()
+    workers.ReportStatisticsWorker().start()
     noblock(httpd.main())
 
     # for debugging

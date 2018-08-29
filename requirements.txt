@@ -20,3 +20,4 @@ PyMySQL
 sqlalchemy
 mysql-connector-python==8.0.11
 aioredis
+aioinflux
