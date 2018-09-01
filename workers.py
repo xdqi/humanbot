@@ -529,19 +529,19 @@ class ReportStatisticsWorker(CoroutineWorker):
 
     async def report(self):
         for k, v in await self.global_statistics.items():
-            await self.global_statistics.set(k, 0)
+            noblock(self.global_statistics.set(k, 0))
 
             measurement, tags_ = k.split('|', maxsplit=1)
             tags = from_json(tags_)
             key = tags['key']
             del tags['key']
 
-            await self.influxdb_client.write(dict(
+            noblock(self.influxdb_client.write(dict(
                 time=datetime.now(),
                 measurement=measurement,
                 tags=tags,
                 fields={key: v}
-            ))
+            )))
 
 
 async def history_add_handler(bot, update, text):
