@@ -87,9 +87,15 @@ async def ocr(fullpath: str):
     result = 'tgpic://kosaka/{}/{}'.format(config.FTP_NAME, fullpath)
     ocr_result = await wget_retry(config.OCR_URL + fullpath)  # type: dict
     if 'body' in ocr_result.keys():
-        result += '\n'
+        result += '\nOCR result:\n'
         result += ocr_result['body']
-    logger.info('pic ocred\n%s', result)
+    if 'qr' in ocr_result.keys():
+        qr = ocr_result['qr']
+        if qr['ok']:
+            result += '\nBarcode result:\n'
+            for i in qr['content']:
+                result += f"{i['barcodeFormat']}: {i['text']}"
+    logger.info('pic ocred & qred\n%s', result)
 
     return result
 

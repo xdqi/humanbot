@@ -13,7 +13,6 @@ from telethon import events, TelegramClient
 from telethon.errors import AuthKeyUnregisteredError, PeerIdInvalidError, \
     ChannelPrivateError
 from telethon.tl.types import PeerUser, User, Chat, ChatFull, Channel, ChannelFull, MessageService
-from telethon.tl.custom.message import Message
 
 import cache
 import config
