@@ -4,7 +4,7 @@ from logging import getLogger
 
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.errors import InviteHashInvalidError, FloodWaitError
+from telethon.errors import InviteHashInvalidError, FloodWaitError, UserNotParticipantError
 from aiogram import Bot
 from aiogram.types import Message
 
@@ -56,7 +56,10 @@ async def leave_group_handler(bot: Bot, message: Message, text: str):
         link = text
         pass
     logger.info('leaving public group %s', link)
-    output = await senders.invoker(LeaveChannelRequest(await senders.invoker.get_input_entity(link)))
+    try:
+        output = await senders.invoker(LeaveChannelRequest(await senders.invoker.get_input_entity(link)))
+    except UserNotParticipantError:
+        return 'user not in group %s' % text
     return str(output)
 
 
