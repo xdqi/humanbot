@@ -69,7 +69,13 @@ async def update_group(client, chat_id: int, title: str = None):
     """
     if await group_last_changed.contains(str(chat_id)):  # user should be updated at a minute basis
         return
-    group = await client.get_entity(chat_id)
+    try:
+        group = await client.get_entity(chat_id)
+    except ValueError:
+        uid = (await client.get_me(input_peer=True)).user_id
+        report_exception()
+        await send_to_admin_channel(f'client {uid} input entity failed for gid {chat_id}')
+        return
     await group_last_changed.add(str(chat_id))
     if isinstance(group, (Chat, ChatFull)):
         await update_group_real(client.conf['uid'], peer_to_internal_id(chat_id), title or group.title, None)
