@@ -16,7 +16,7 @@ import botocore.config
 
 from aiogram.utils.exceptions import TelegramAPIError
 from telethon import TelegramClient
-from telethon.tl.types import MessageMediaPhoto
+from telethon.tl.types import Photo
 from telethon.utils import get_peer_id, resolve_id
 
 import config
@@ -186,9 +186,9 @@ async def need_to_be_online():
     return False
 
 
-async def get_photo_address(client: TelegramClient, media: MessageMediaPhoto):
+async def get_photo_address(client: TelegramClient, media: Photo):
     # get largest photo
-    original = media.photo.sizes[-1]  # type: PhotoSize
+    original = media.sizes[-1]
     location = original.location  # type: FileLocation
     now = datetime.now()
     return to_json(dict(

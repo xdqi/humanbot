@@ -50,6 +50,8 @@ async def update_user(client, user_id):
         return
     try:
         user = await client.get_entity(PeerUser(user_id))  # type: User
+        if isinstance(user, Channel):  # not a user
+            return
     except (KeyError, TypeError) as e:
         logger.warning('Get user info failed: %s', user_id)
         report_exception()
@@ -139,7 +141,7 @@ async def update_new_message_handler(event: events.NewMessage.Event):
         flag = ChatFlag.edited
 
     if event.photo:
-        result = await get_photo_address(event.client, event.media)
+        result = await get_photo_address(event.client, event.photo)
         text = config.OCR_HINT + '\n' + result + '\n' + event.text
 
     await report_statistics(measurement='bot',

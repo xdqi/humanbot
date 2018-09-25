@@ -402,7 +402,7 @@ class FetchHistoryWorker(CoroutineWorker):
             text = markdown.unparse(msg.message, msg.entities)
 
             if isinstance(msg.media, MessageMediaPhoto):
-                result = await get_photo_address(client, msg.media)
+                result = await get_photo_address(client, msg.media.photo)
                 text = config.OCR_HISTORY_HINT + '\n' + result + '\n' + text
 
             await report_statistics(measurement='bot',
