@@ -13,7 +13,7 @@ from aiogram.utils.exceptions import BadRequest, RetryAfter, NetworkError, ChatN
 from telethon.errors import InviteHashExpiredError, InviteHashInvalidError, FloodWaitError, ChannelsTooMuchError
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import CheckChatInviteRequest, GetHistoryRequest, ImportChatInviteRequest
-from telethon.tl.types import ChatInvite, ChatInviteAlready
+from telethon.tl.types import ChatInvite, ChatInviteAlready, InputChannel
 
 import aiomysql.sa
 import sqlalchemy
@@ -178,6 +178,8 @@ async def test_and_join_public_channel(engine: aiomysql.sa.Engine, link: str, jo
 
     try:
         group = await senders.invoker.get_input_entity(link)  # type: InputChannel
+        if not isinstance(group, InputChannel):
+            return None, False
     except FloodWaitError as e:
         logger.warning('Get group via username flooded. %r', e)
         return gid, False
