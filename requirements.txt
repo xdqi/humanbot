@@ -3,7 +3,6 @@ cryptg
 aiogram<2.0
 
 curio
-uvloop
 ujson
 
 aiohttp
