@@ -107,7 +107,7 @@ def update_handler_wrapper(func):
             send_to_admin = True
 
             # special process with common exceptions
-            if isinstance(e, ValueError) and 'find the input entity for "PeerUser' in e.args[0]:
+            if isinstance(e, ValueError) and 'find the input entity for <telethon.tl.types.PeerUser' in e.args[0]:
                 exc = e.args[0]
                 send_to_admin = False
                 return
