@@ -432,7 +432,7 @@ class FetchHistoryWorker(CoroutineWorker):
     @classmethod
     async def stat(cls):
         basic = await super().stat()
-        return basic + await cls.status.repr()
+        return basic + await cls.status.repr() + '\n'
 
 
 class InviteWorker(CoroutineWorker):
