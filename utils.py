@@ -111,8 +111,8 @@ def tg_html_entity(s: str) -> str:
 
 async def send_to(chat: int, msg: str, strip: bool = True):
     logger.info('Sending to administrators: \n%s', msg)
-    msg = tg_html_entity(msg)
-    if strip and len(msg.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
+    html = tg_html_entity(msg)
+    if strip and len(html.encode('utf-8')) > 500 or len(msg.splitlines()) > 10:
         buffer = BytesIO(msg.encode('utf-8'))
         now = datetime.now()
         date = now.strftime('%y/%m/%d')
@@ -120,10 +120,10 @@ async def send_to(chat: int, msg: str, strip: bool = True):
         path = '/{}'.format(date)
         thread_name = current_thread().name  # todo: there may be a problem
         filename = '{}-{}.txt'.format(thread_name, timestamp)
-        exception = msg.splitlines()[-1]
+        exception = html.splitlines()[-1]
         url_path = await upload_log(buffer, path, filename)
 
-        msg = 'Long message: ... {}\nURL: {}{}\nTime: {}'.format(
+        html = 'Long message: ... {}\nURL: {}{}\nTime: {}'.format(
             exception,
             config.LOG_URL,
             url_path,
@@ -131,7 +131,7 @@ async def send_to(chat: int, msg: str, strip: bool = True):
         )
     try:
         await senders.bot.send_message(chat_id=chat,
-                                       text=msg.strip(),
+                                       text=html.strip(),
                                        parse_mode='HTML',
                                        disable_web_page_preview=False)
     except TelegramAPIError:
