@@ -119,12 +119,15 @@ class CoroutineWorker(metaclass=WorkProperties):
                 await self.status.set('last', get_now_timestamp())
                 await self.status.set('size', await self.queue.qsize())
             except (KeyboardInterrupt, CancelledError):
+                msg = traceback.format_exc() + '\n%s worker exited: %s' % (str(type(self)), e)
+                await send_to_admin_channel(msg)
+                logger.error(msg)
                 await self.queue.put(message)
                 break
             except BaseException as e:
-                logger.error('%s worker fails: %s', str(type(self)), e)
-                traceback.print_exc()
-                report_exception()
+                msg = traceback.format_exc() + '\n%s worker fails: %s' % (str(type(self)), e)
+                await send_to_admin_channel(msg)
+                logger.error(msg)
                 await self.queue.put(message)
 
     def start(self, count: int=1):
