@@ -8,7 +8,7 @@ from pdb import Pdb
 from signal import signal, SIGUSR1
 from functools import wraps
 
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import SessionPasswordNeededError, BotMethodInvalidError
 from telethon import events, TelegramClient
 from telethon.errors import AuthKeyUnregisteredError, PeerIdInvalidError, \
     ChannelPrivateError
@@ -156,7 +156,10 @@ async def update_new_message_handler(event: events.NewMessage.Event):
         await update_group(event.client, event.chat_id)
 
     if await need_to_be_online():
-        await event.client.send_read_acknowledge(event.input_chat, max_id=event.message.id, clear_mentions=True)
+        try:
+            await event.client.send_read_acknowledge(event.input_chat, max_id=event.message.id, clear_mentions=True)
+        except BotMethodInvalidError:
+            pass
 
 
 @update_handler_wrapper
@@ -203,6 +206,13 @@ async def notify_when_dead(conf):
     await send_to_admin_channel(msg)
 
 
+def bind_events(client: TelegramClient):
+    client.add_event_handler(update_new_message_handler, events.NewMessage)
+    client.add_event_handler(update_chat_action_handler, events.ChatAction)
+    client.add_event_handler(update_new_message_handler, events.MessageEdited)
+    client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
+
+
 async def client_connect(conf):
     client = conf['client']  # type: TelegramClient
 
@@ -223,10 +233,22 @@ async def client_connect(conf):
 
     logger.info(f'Client {conf["name"]} initialized succesfully!')
 
-    client.add_event_handler(update_new_message_handler, events.NewMessage)
-    client.add_event_handler(update_chat_action_handler, events.ChatAction)
-    client.add_event_handler(update_new_message_handler, events.MessageEdited)
-    client.add_event_handler(update_deleted_message_handler, events.MessageDeleted)
+    bind_events(client)
+    noblock(notify_when_dead(conf))
+
+
+async def bot_connect(conf):
+    client = conf['client']  # type: TelegramClient
+
+    logger.info(f'Connecting to Telegram Servers with {conf["name"]}...')
+    await client.connect()
+
+    if not await client.is_user_authorized():
+        await client.sign_in(bot_token=conf['token'])
+
+    logger.info(f'Bot {conf["name"]} initialized succesfully!')
+
+    bind_events(client)
     noblock(notify_when_dead(conf))
 
 
@@ -252,6 +274,9 @@ async def main():
     for conf in config.CLIENTS:
         await client_connect(conf)
 
+    for conf in config.NEW_BOTS:
+        await bot_connect(conf)
+
     # launching bot and workers
     await realbot.main()
     workers.FindLinkWorker().start()
@@ -276,7 +301,7 @@ async def main():
             break
 
     # cleanup
-    for conf in config.CLIENTS:
+    for conf in config.CLIENTS + config.NEW_BOTS:
         conf['client'].disconnect()
 
 

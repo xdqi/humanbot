@@ -125,14 +125,18 @@ class CoroutineWorker(metaclass=WorkProperties):
                 await self.queue.task_done()
                 await self.status.set('last', get_now_timestamp())
                 await self.status.set('size', await self.queue.qsize())
-            except (KeyboardInterrupt, CancelledError):  # cannot start any coroutine at this time!!!
-                msg = traceback.format_exc() + '\n%s worker exited: %s' % (str(type(self)), e)
+            except (KeyboardInterrupt, GeneratorExit, CancelledError) as e:  # cannot start any coroutine at this time!
+                msg = traceback.format_exc() + '\n%s worker exited: %s' % (self.name, e)
                 noblock(send_to_admin_channel(msg))
                 self.logger.error(msg)
                 noblock(self.queue.put(message))
+                self.start()  # TODO: may cause exit issue
                 break
-            except BaseException as e:
-                msg = traceback.format_exc() + '\n%s worker fails: %s' % (str(type(self)), e)
+            except SystemExit as e:
+                logger.warning('%s worker gracefully stopped', self.name)
+                break
+            except Exception as e:
+                msg = traceback.format_exc() + '\n%s worker fails: %s' % (self.name, e)
                 await send_to_admin_channel(msg)
                 self.logger.error(msg)
                 await self.queue.put(message)

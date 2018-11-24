@@ -40,6 +40,15 @@ BOTS = [
     },
 ]
 
+NEW_BOTS = [
+    {
+        'name': 'real bot runs in telethon mode',
+        'token': BOT_TOKEN,
+        'session_name': 'realbot',
+        'uid': 222222222
+    },
+]
+
 SMS_WEBHOOK_LISTEN = '127.0.0.1'
 SMS_WEBHOOK_PORT = 8088
 SMS_WEBHOOK_PATH = '/sms'
