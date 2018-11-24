@@ -1,19 +1,24 @@
 package main
 
 import (
+	"encoding/json"
+	"github.com/getsentry/raven-go"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
-	"encoding/json"
-	"strings"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"time"
-	"github.com/getsentry/raven-go"
 )
 
 type OcrItem struct {
 	Id    int `json:"id"`
 	Tries int `json:"tries,omitempty"`
+}
+
+func MessageUniqueKey(chat ChatNew) string {
+	return strconv.FormatInt(chat.ChatId, 10) + "-" + strconv.Itoa(chat.MessageId)
 }
 
 func insertMain() {
@@ -23,6 +28,7 @@ func insertMain() {
 
 	insertQueue := RedisQueue{"insert"}
 	ocrQueue := RedisQueue{"ocr"}
+	insertSet := RedisExpiringSet{"insert_set", 10}
 
 	if err != nil {
 		raven.CaptureErrorAndWait(err, map[string]string{"module": "insert", "func": "start"})
@@ -45,6 +51,11 @@ func insertMain() {
 			var chat ChatNew
 			json.Unmarshal(msg, &chat)
 
+			if chat.Flag == int16(ChatFlagNew) && insertSet.Contains(MessageUniqueKey(chat)) {
+				// ignore if inserted
+				continue
+			}
+
 			for {
 				if err := tx.Create(&chat).Error; err != nil {
 					logger.Printf("insert message error: %v", err)
@@ -53,6 +64,7 @@ func insertMain() {
 				break
 			}
 
+			insertSet.Add(MessageUniqueKey(chat))
 			client.HSet("insert_worker_status", "last", time.Now().Unix())
 			client.HSet("insert_worker_status", "size", insertQueue.Size())
 
