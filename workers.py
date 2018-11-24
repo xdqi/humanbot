@@ -2,18 +2,19 @@ import asyncio
 from io import BytesIO
 from threading import Thread
 import traceback
-from logging import getLogger
+from logging import getLogger, WARNING
 from cProfile import Profile
 from datetime import datetime, timedelta
 from concurrent.futures import CancelledError
 
+from aiogram.utils.exceptions import BadRequest
 from telethon import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto, ChatInvite
 from telethon.extensions import markdown
 from telethon.errors import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
-    RpcCallFailError, ChannelsTooMuchError
+    RpcCallFailError, ChannelsTooMuchError, FileMigrateError, LocationInvalidError
 from aiogram import Bot
 
 import aiomysql.sa
@@ -23,7 +24,6 @@ from aioinflux import InfluxDBClient
 import cache
 import config
 import models
-import realbot
 import senders
 from utils import get_now_timestamp, report_exception, upload_pic, ocr, get_photo_address, from_json, to_json, \
     send_to_admin_channel, noblock, block, OcrError, tg_html_entity, report_statistics
@@ -99,36 +99,45 @@ class CoroutineWorker(metaclass=WorkProperties):
     queue = None  # type: cache.RedisQueue
 
     def __init__(self):
-        pass
+        self.logger = getLogger('worker-' + self.name)
+        self.logger.setLevel(WARNING)
 
     async def __call__(self, *args, **kwargs):
         await self.run()
 
     async def run(self):
-        logger.info('%s worker has started', self.name)
+        self.logger.info('%s worker has started', self.name)
         engine = await models.get_aio_engine()
 
         while True:
             try:
+                self.logger.info('%s enter loop', self.name)
                 message = await self.queue.get()  # type: str
+                self.logger.info('%s got message', self.name)
                 if message is None:
+                    self.logger.info('%s no message, sleep', self.name)
                     await asyncio.sleep(0.01)
                     continue
+
+                self.logger.info('%s enter handler', self.name)
                 await self.handler(engine, message)
+                self.logger.info('%s done handler', self.name)
                 await self.queue.task_done()
                 await self.status.set('last', get_now_timestamp())
                 await self.status.set('size', await self.queue.qsize())
-            except (KeyboardInterrupt, CancelledError):
+            except (KeyboardInterrupt, CancelledError):  # cannot start any coroutine at this time!!!
                 msg = traceback.format_exc() + '\n%s worker exited: %s' % (str(type(self)), e)
-                await send_to_admin_channel(msg)
-                logger.error(msg)
-                await self.queue.put(message)
+                noblock(send_to_admin_channel(msg))
+                self.logger.error(msg)
+                noblock(self.queue.put(message))
                 break
             except BaseException as e:
                 msg = traceback.format_exc() + '\n%s worker fails: %s' % (str(type(self)), e)
                 await send_to_admin_channel(msg)
-                logger.error(msg)
+                self.logger.error(msg)
                 await self.queue.put(message)
+
+        self.logger.info('%s worker has stopped', self.name)
 
     def start(self, count: int=1):
         for _ in range(count):
@@ -222,14 +231,20 @@ class OcrWorker(CoroutineWorker):
             except FloodWaitError as e:
                 logger.warning('download picture flooded (%s), wait %s seconds', info['client'], e.seconds)
                 return config.OCR_HINT + '\n' + to_json(info)
+            except FileMigrateError as e:
+                logger.warning('download picture dc wrong but not switched %r', e)
+                return config.OCR_HINT + '\n' + to_json(info)
+            except LocationInvalidError as e:
+                logger.warning('location is invalid %r', e)
+                return config.OCR_HINT + '\n' + to_json(info)
         elif isinstance(client, Bot):
             file_id = info['file_id']
 
             try:
                 await client.download_file_by_id(file_id, destination=buffer)
-            except RuntimeError:
-                realbot.init(0)
-                raise
+            except BadRequest as e:
+                logger.warning('bot file id not found: %s', e.text)
+                return config.OCR_HINT + '\n' + to_json(info)
 
         buffer.seek(0)
         full_path = await upload_pic(buffer, info['path'], info['filename'])
@@ -262,7 +277,11 @@ class OcrWorker(CoroutineWorker):
 
         hint, info_text, text = record_text.split('\n', maxsplit=2)
 
-        info = from_json(info_text)
+        try:
+            info = from_json(info_text)
+        except ValueError:  # json decode failed, just fail silently
+            logger.warning('ocr %s failed, cannot decode %r', record_id, info_text)
+            return
         logger.info('ocr %s started', record_id)
 
         # async with self.lock:

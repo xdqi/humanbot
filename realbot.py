@@ -134,11 +134,6 @@ def make_webhook_handler(dispatcher):
     return MyWebhookRequestHandler
 
 
-def init(sleep):
-    asyncio.get_event_loop().set_task_factory(aiogram_context.task_factory)
-    time.sleep(sleep)
-
-
 async def main():
     logger.setLevel(INFO)
 
