@@ -76,7 +76,7 @@ async def update_group(client, chat_id: int, title: str = None):
     except ValueError:
         uid = (await client.get_me(input_peer=True)).user_id
         report_exception()
-        await send_to_admin_channel(f'client {uid} input entity failed for gid {chat_id}')
+        # await send_to_admin_channel(f'client {uid} input entity failed for gid {chat_id}')
         return
     except ChannelPrivateError:
         uid = (await client.get_me(input_peer=True)).user_id

@@ -127,7 +127,9 @@ class CoroutineWorker(metaclass=WorkProperties):
                 await self.status.set('size', await self.queue.qsize())
             except (KeyboardInterrupt, GeneratorExit, CancelledError) as e:  # cannot start any coroutine at this time!
                 msg = traceback.format_exc() + '\n%s worker exited: %s' % (self.name, e)
-                noblock(send_to_admin_channel(msg))
+                report_exception()
+                if not isinstance(e, GeneratorExit):
+                    noblock(send_to_admin_channel(msg))
                 self.logger.error(msg)
                 noblock(self.queue.put(message))
                 self.start()  # TODO: may cause exit issue
