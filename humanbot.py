@@ -148,10 +148,10 @@ async def update_new_message_handler(event: events.NewMessage.Event):
                             tags={'master': (await event.client.get_me(input_peer=True)).user_id,
                                   'type': 'insert'},
                             fields={'count': 1})
-    await insert_message_local_timezone(event.chat_id, event.message.id, event.sender_id, text, event.message.date, flag)
+    await insert_message_local_timezone(event.chat_id, event.message.id, event.from_id, text, event.message.date, flag)
     await find_link_enqueue(event.raw_text)
 
-    await update_user(event.client, event.sender_id)
+    await update_user(event.client, event.from_id)
     if event.is_group or event.is_channel:
         await update_group(event.client, event.chat_id)
 

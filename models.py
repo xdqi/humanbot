@@ -241,6 +241,9 @@ async def insert_message(chat_id: int, message_id, user_id: int, msg: str, date:
         return
     utc_timestamp = int(date.timestamp())
 
+    if user_id and (user_id < 0 or user_id > 0x7fffffff):
+        logger.warning('userid is %s', user_id)
+
     chat = dict(chat_id=chat_id,
                 message_id=message_id,
                 user_id=user_id,
