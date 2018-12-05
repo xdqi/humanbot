@@ -259,7 +259,10 @@ async def insert_message(chat_id: int, message_id, user_id: int, msg: str, date:
 
 
 async def insert_message_local_timezone(chat_id, message_id, user_id, msg, date: datetime, flag=ChatFlag.new):
-    utc_date = date.replace(tzinfo=timezone.utc)
+    try:
+        utc_date = date.replace(tzinfo=timezone.utc)
+    except AttributeError:
+        return
     await insert_message(chat_id, message_id, user_id, msg, utc_date, flag, find_link=False)
 
 
