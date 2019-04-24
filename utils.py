@@ -6,6 +6,7 @@ from io import BytesIO
 from threading import current_thread
 from os import makedirs
 from random import randint
+from base64 import b64encode
 from ujson import dumps as to_json, loads as from_json
 
 import aiohttp
@@ -17,7 +18,7 @@ import botocore.config
 from aiogram.utils.exceptions import TelegramAPIError
 from telethon import TelegramClient
 from telethon.tl.types import Photo
-from telethon.utils import get_peer_id, resolve_id
+from telethon.utils import get_peer_id, resolve_id, get_input_location
 
 import config
 import cache
@@ -33,9 +34,11 @@ async def aiohttp_init():
     session = aiobotocore.get_session()
     protocol = 'https://' if config.MINIO_SECURE else 'http://'
     aiobotocore_client = session.create_client('s3',
+                                               verify=config.MINIO_VERIFY,
                                                endpoint_url=protocol + config.MINIO_SERVER,
                                                aws_secret_access_key=config.MINIO_SECRET_KEY,
                                                aws_access_key_id=config.MINIO_ACCESS_KEY,
+                                               region_name=config.MINIO_REGION,
                                                config=botocore.config.Config(signature_version='s3v4'))
 
 
@@ -191,12 +194,16 @@ async def get_photo_address(client: TelegramClient, media: Photo):
     original = media.sizes[-1]
     location = original.location  # type: FileLocation
     now = datetime.now()
+    dc_id, input_location = get_input_location(media)
+    input_location_json = input_location.to_dict()
+    input_location_json['file_reference'] = b64encode(input_location_json['file_reference']).decode('utf-8')
     return to_json(dict(
         location=location.to_dict(),
+        input_location=input_location_json,
         client=(await client.get_me(input_peer=True)).user_id,
         path='{}/{}'.format(now.year, now.month),
         filename='{}-{}_{}_{}.jpg'.format(get_now_timestamp(),
-                                          location.dc_id,
+                                          dc_id,
                                           location.volume_id,
                                           location.local_id)
     ))

@@ -59,6 +59,8 @@ GROUP_MEMBER_JOIN_LIMIT = 20
 
 MINIO_SERVER = 's3.amazonaws.com'
 MINIO_SECURE = True
+MINIO_VERIFY = True
+MINIO_REGION = 'us-east-1'
 MINIO_BUCKET = 'pic-bucket'
 MINIO_ACCESS_KEY = 'access-key'
 MINIO_SECRET_KEY = 'secret-key'

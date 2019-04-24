@@ -6,12 +6,13 @@ from logging import getLogger, WARNING
 from cProfile import Profile
 from datetime import datetime, timedelta
 from concurrent.futures import CancelledError
+from base64 import b64decode
 
 from aiogram.utils.exceptions import BadRequest
 from telethon import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.types import Message, MessageService, InputFileLocation, User, MessageMediaPhoto, ChatInvite
+from telethon.tl.types import Message, MessageService, InputPhotoFileLocation, User, MessageMediaPhoto, ChatInvite
 from telethon.extensions import markdown
 from telethon.errors import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
     RpcCallFailError, ChannelsTooMuchError, FileMigrateError, LocationInvalidError
@@ -221,16 +222,18 @@ class OcrWorker(CoroutineWorker):
         buffer = BytesIO()
 
         if isinstance(client, TelegramClient):
-            location_info = info['location']
+            try:
+                location_info = info['input_location']
+                location_info['file_reference'] = b64decode(location_info['file_reference'])
+            except KeyError:
+                logger.warning('old style location object, cannot load it now')
+                # TODO: fetch the message again
+                return config.OCR_HINT + '\n' + to_json(info)
             try:
                 del location_info['_']
             except KeyError:
                 pass
-            try:
-                del location_info['dc_id']
-            except KeyError:
-                pass
-            location = InputFileLocation(**location_info)
+            location = InputPhotoFileLocation(**location_info)
 
             try:
                 await client.download_file(location, buffer)
