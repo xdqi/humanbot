@@ -23,6 +23,23 @@ class RedisObject:
         await self.r.delete(self.name)
 
 
+class RedisExpiringValue(RedisObject):
+    def __init__(self, name):
+        super().__init__(name)
+
+    async def ttl(self) -> int:
+        return await self.r.ttl(self.name)
+
+    async def expire(self, time: int):
+        await self.r.expire(self.name, time)
+
+    async def set(self, value: AnyPrimitive):
+        await self.r.set(self.name, value)
+
+    async def get(self) -> str:
+        return (await self.r.get(self.name)).decode('utf-8')
+
+
 class RedisExpiringSet(RedisObject):
     def __init__(self, name, expire):
         super().__init__(name)

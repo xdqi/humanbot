@@ -20,6 +20,7 @@ from telethon import TelegramClient
 from telethon.tl.types import Photo
 from telethon.utils import get_peer_id, resolve_id, get_input_location
 
+from b2 import B2
 import config
 import cache
 import senders
@@ -28,7 +29,7 @@ logger = getLogger(__name__)
 raven_client = RavenClient(config.RAVEN_DSN, transport=AioHttpTransport)
 
 async def aiohttp_init():
-    global aiohttp_session, aiobotocore_client
+    global aiohttp_session, aiobotocore_client, b2_api
     aiohttp_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
 
     session = aiobotocore.get_session()
@@ -40,6 +41,7 @@ async def aiohttp_init():
                                                aws_access_key_id=config.MINIO_ACCESS_KEY,
                                                region_name=config.MINIO_REGION,
                                                config=botocore.config.Config(signature_version='s3v4'))
+    b2_api = B2(config.B2_APPLICATION_KEY_ID, config.B2_APPLICATION_KEY_SECRET)
 
 
 class OcrError(BaseException):
@@ -77,8 +79,14 @@ async def upload_minio(buffer: BytesIO, path, filename) -> str:
     return url_path
 
 
+async def upload_b2(buffer: BytesIO, path, filename) -> str:
+    url_path = '{}/{}'.format(path, filename)
+    await b2_api.upload(config.B2_BUCKET_ID, url_path, buffer, buffer.getbuffer().nbytes)
+    return url_path
+
+
 async def upload_pic(buffer, path, filename) -> str:
-    return await upload_minio(buffer, path, filename)
+    return await upload_b2(buffer, path, filename)
 
 
 async def upload_log(buffer, path, filename) -> str:

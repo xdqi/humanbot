@@ -65,6 +65,10 @@ MINIO_BUCKET = 'pic-bucket'
 MINIO_ACCESS_KEY = 'access-key'
 MINIO_SECRET_KEY = 'secret-key'
 
+B2_APPLICATION_KEY_ID = '00xxxxxxxxxxxx0000000001'
+B2_APPLICATION_KEY_SECRET = 'yyyyyyyyyyyyyyyyyyyyyyyyyyy'
+B2_BUCKET_ID = '0123456789abcdef'
+
 FTP_NAME = 'example-xxx'
 PIC_URL = 'http://example-xxx/pic'
 LOG_PATH = 'log-path'
