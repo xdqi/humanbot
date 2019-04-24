@@ -113,8 +113,8 @@ class MyDispatcher(Dispatcher):
                                                               text=result,
                                                               parse_mode='HTML')
 
-        self.register_message_handler(lambda msg: msg.chat.id in config.ADMIN_UIDS,
-                                      callback=command_handler,
+        self.register_message_handler(command_handler,
+                                      lambda msg: msg.chat.id in config.ADMIN_UIDS,
                                       commands=commands)
 
 
