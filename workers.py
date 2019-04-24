@@ -545,9 +545,10 @@ class ReportStatisticsWorker(CoroutineWorker):
     async def run(self):
         logger.info('%s worker has started', self.name)
 
-        self.influxdb_client = InfluxDBClient(**config.INFLUXDB_CONFIG)
         if config.INFLUXDB_URL:
-            self.influxdb_client._url = config.INFLUXDB_URL
+            setattr(InfluxDBClient, 'url', property(lambda s: config.INFLUXDB_URL))
+
+        self.influxdb_client = InfluxDBClient(**config.INFLUXDB_CONFIG)
 
         while True:
             try:
