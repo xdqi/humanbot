@@ -213,7 +213,11 @@ class OcrWorker(CoroutineWorker):
         await self.cache.delitem(file_id)
 
     async def do_ocr(self, info: dict):
-        client = senders.clients[info['client']]
+        try:
+            client = senders.clients[info['client']]
+        except KeyError:
+            return config.OCR_HINT + '\n' + to_json(info)
+
         buffer = BytesIO()
 
         if isinstance(client, TelegramClient):
