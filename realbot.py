@@ -10,7 +10,6 @@ from logging import getLogger, INFO, DEBUG
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update, ChatType, Message, User, PhotoSize, ContentType
 import aiogram.dispatcher.webhook
-from aiogram.utils import context as aiogram_context
 
 import config
 import workers
@@ -114,19 +113,19 @@ class MyDispatcher(Dispatcher):
                                                               text=result,
                                                               parse_mode='HTML')
 
-        self.register_message_handler(callback=command_handler,
-                                      commands=commands,
-                                      func=lambda msg: msg.chat.id in config.ADMIN_UIDS)
+        self.register_message_handler(lambda msg: msg.chat.id in config.ADMIN_UIDS,
+                                      callback=command_handler,
+                                      commands=commands)
 
 
 def make_webhook_handler(dispatcher):
-    from aiogram.utils import context
 
     class MyWebhookRequestHandler(aiogram.dispatcher.webhook.WebhookRequestHandler):
+
         def get_dispatcher(self):
             try:  # aiogram quirks
-                context.set_value('dispatcher', dispatcher)
-                context.set_value('bot', dispatcher.bot)
+                Dispatcher.set_current(dispatcher)
+                Bot.set_current(dispatcher.bot)
             except RuntimeError:
                 pass
             return dispatcher
@@ -166,7 +165,7 @@ async def main():
             dispatcher.register_command_handler('dialogs', admin.dialogs_handler)
             # dispatcher.register_command_handler('help', show_commands_handler)
 
-        dispatcher.register_listen_handler(message, content_types=ContentType.TEXT | ContentType.PHOTO | ContentType.DOCUMENT)
+        dispatcher.register_listen_handler(message, content_types=[ContentType.TEXT, ContentType.PHOTO, ContentType.DOCUMENT])
 
         dispatcher.register_errors_handler(error_handler)
 
