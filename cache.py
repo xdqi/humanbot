@@ -1,8 +1,12 @@
 import datetime
+from typing import Union
 
 import aioredis
 import config
 import utils
+
+
+AnyPrimitive = Union[str, int, float]
 
 
 class RedisObject:
@@ -68,16 +72,16 @@ class RedisQueue(RedisObject):
     async def task_done(self):
         pass
 
-    async def get(self) -> str:
+    async def get(self) -> Union[str, None]:
         val = await self.r.lpop(self.name)
         if val is None:
             return
         return val.decode('utf-8')
 
-    async def insert(self, value: str):
+    async def insert(self, value: AnyPrimitive):
         await self.r.lpush(self.name, value)
 
-    async def put(self, value: str):
+    async def put(self, value: AnyPrimitive):
         await self.r.rpush(self.name, value)
 
 
@@ -89,7 +93,7 @@ class RedisDict(RedisObject):
         d = await self.r.hgetall(self.name)
         return 'RedisDict%s' % {k.decode('utf-8'): v.decode('utf-8') for k, v in d.items()}
 
-    async def getitem(self, key: str) -> str:
+    async def getitem(self, key: str) -> Union[str, None]:
         val = await self.r.hget(self.name, key)
         if val is None:
             return
@@ -98,7 +102,7 @@ class RedisDict(RedisObject):
     def __getitem__(self, key: str):
         return self.getitem(key)
 
-    async def set(self, key: str, value: str):
+    async def set(self, key: str, value: AnyPrimitive):
         await self.r.hset(self.name, key, value)
 
     def __setitem__(self, key: str, value: str):
