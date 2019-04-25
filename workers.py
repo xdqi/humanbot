@@ -155,8 +155,13 @@ class CoroutineWorker(metaclass=WorkProperties):
 
     @classmethod
     async def stat(cls):
+        try:
+            last = int(await cls.status.getitem('last'))
+        except TypeError:
+            last = get_now_timestamp()
+            await cls.status.set('last', last)
         return '{} worker: {} seconds ago, size {}\n'.format(
-            cls.name, get_now_timestamp() - int(await cls.status.getitem('last')), await cls.queue.qsize())
+            cls.name, get_now_timestamp() - last, await cls.queue.qsize())
 
 
 class MessageInsertWorker(Worker):
@@ -250,6 +255,10 @@ class OcrWorker(CoroutineWorker):
             except LocationInvalidError as e:
                 logger.warning('location is invalid %r', e)
                 return config.OCR_HINT + '\n' + to_json(info)
+            except ConnectionError as e:
+                logger.warning('connection failed %r', e)
+                return config.OCR_HINT + '\n' + to_json(info)
+
         elif isinstance(client, Bot):
             file_id = info['file_id']
 
