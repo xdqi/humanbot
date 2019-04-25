@@ -75,7 +75,7 @@ async def message(bot: Bot, msg: Message, flag: ChatFlag):
     await update_group(bot, msg.chat.id)
 
 
-async def error_handler(bot: Bot, update: Update, error: Exception):
+async def error_handler(update: Update, error: Exception):
     report_exception()
     logger.error('Exception raised on PID %s %s', getpid(), current_thread())
     await send_to_admin_channel(f'Exception raised on PID {getpid()} {current_thread()}\n {traceback.format_exc()}')
