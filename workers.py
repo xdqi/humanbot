@@ -6,7 +6,7 @@ from logging import getLogger, WARNING
 from cProfile import Profile
 from datetime import datetime, timedelta
 from concurrent.futures import CancelledError
-from base64 import b64decode
+from base64 import b64decode, b64encode
 
 from aiogram.utils.exceptions import BadRequest
 from telethon import TelegramClient
@@ -15,7 +15,7 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.types import Message, MessageService, InputPhotoFileLocation, User, MessageMediaPhoto, ChatInvite
 from telethon.extensions import markdown
 from telethon.errors import AuthKeyUnregisteredError, FloodWaitError, ChannelPrivateError, \
-    RpcCallFailError, ChannelsTooMuchError, FileMigrateError, LocationInvalidError
+    RpcCallFailError, ChannelsTooMuchError, FileMigrateError, LocationInvalidError, FileIdInvalidError
 from aiogram import Bot
 
 import aiomysql.sa
@@ -242,21 +242,10 @@ class OcrWorker(CoroutineWorker):
 
             try:
                 await client.download_file(location, buffer)
-            except AuthKeyUnregisteredError as e:
+            except (AuthKeyUnregisteredError, FloodWaitError, FileMigrateError, LocationInvalidError, ConnectionError, FileIdInvalidError) as e:
                 report_exception()
-                logger.warning('download picture auth key unregistered error %r', e)
-                return config.OCR_HINT + '\n' + to_json(info)
-            except FloodWaitError as e:
-                logger.warning('download picture flooded (%s), wait %s seconds', info['client'], e.seconds)
-                return config.OCR_HINT + '\n' + to_json(info)
-            except FileMigrateError as e:
-                logger.warning('download picture dc wrong but not switched %r', e)
-                return config.OCR_HINT + '\n' + to_json(info)
-            except LocationInvalidError as e:
-                logger.warning('location is invalid %r', e)
-                return config.OCR_HINT + '\n' + to_json(info)
-            except ConnectionError as e:
-                logger.warning('connection failed %r', e)
+                logger.exception('ocr download got error')
+                location_info['file_reference'] = b64encode(location_info['file_reference']).decode('utf-8')
                 return config.OCR_HINT + '\n' + to_json(info)
 
         elif isinstance(client, Bot):
@@ -270,6 +259,7 @@ class OcrWorker(CoroutineWorker):
 
         buffer.seek(0)
         full_path = await upload_pic(buffer, info['path'], info['filename'])
+        buffer.close()
 
         await report_statistics(measurement='bot',
                                 tags={'master': info['client'],
