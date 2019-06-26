@@ -1,6 +1,6 @@
-telethon==1.7.7
+telethon==1.8.0
 cryptg
-aiogram==2.1
+aiogram==2.2
 
 curio
 ujson
@@ -19,4 +19,4 @@ PyMySQL
 sqlalchemy
 mysql-connector-python==8.0.11
 aioredis
-aioinflux==0.7.1
+aioinflux==0.8.0
