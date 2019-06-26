@@ -164,28 +164,32 @@ async def update_new_message_handler(event: events.NewMessage.Event):
 
 @update_handler_wrapper
 async def update_chat_action_handler(event: events.ChatAction.Event):
+    try:
+        uid = event.user_id
+    except TypeError:
+        report_exception()
+        return
     if event.user_added or event.user_joined or event.user_left or event.user_kicked:
-        await update_user(event.client, event.user_id)
-    if event.user_kicked and event.user_id in [conf['uid'] for conf in config.CLIENTS]:
+        await update_user(event.client, uid)
+    if event.user_kicked and uid in [conf['uid'] for conf in config.CLIENTS]:
         msg = f'I, {event.client.conf["name"]}, was kicked by {event.kicked_by.username} (uid {event.kicked_by.id})'
         logger.warning(msg)
         await send_to_admin_channel(msg)
-    else:
-        try:
-            await update_group(event.client, event.chat_id)
-        except ChannelPrivateError as e:
-            msg = ''
-            if event.user:
-                msg += f'{event.user.username} (uid {event.user.id}) was kicked by'
-            if event.kicked_by:
-                msg += f' {event.kicked_by.username} (uid {event.kicked_by.id})'
-            if event.chat:
-                msg += f'in chat {event.chat.title}'
-            if hasattr(event.chat, 'username'):
-                msg += f'({event.chat.username})'
-            msg += traceback.format_exc()
-            logger.warning(msg)
-            await send_to_admin_channel(msg)
+    try:
+        await update_group(event.client, event.chat_id)
+    except ChannelPrivateError as e:
+        msg = ''
+        if event.user:
+            msg += f'{event.user.username} (uid {event.user.id}) was kicked by'
+        if event.kicked_by:
+            msg += f' {event.kicked_by.username} (uid {event.kicked_by.id})'
+        if event.chat:
+            msg += f'in chat {event.chat.title}'
+        if hasattr(event.chat, 'username'):
+            msg += f'({event.chat.username})'
+        msg += traceback.format_exc()
+        logger.warning(msg)
+        await send_to_admin_channel(msg)
 
 
 @update_handler_wrapper
@@ -252,8 +256,6 @@ async def bot_connect(conf):
     noblock(notify_when_dead(conf))
 
 
-# TODO: add handler to handle UpdateChannel
-
 async def main():
 
     basicConfig(level=INFO)
@@ -284,7 +286,7 @@ async def main():
     # workers.EntityUpdateWorker().start()
     # workers.MessageMarkWorker().start()
     workers.FetchHistoryWorker().start()
-    workers.OcrWorker().start(4)
+    workers.OcrWorker().start(8)
     workers.InviteWorker().start()
     workers.JoinGroupWorker().start()
     workers.ReportStatisticsWorker().start()

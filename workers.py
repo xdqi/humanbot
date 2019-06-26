@@ -242,7 +242,7 @@ class OcrWorker(CoroutineWorker):
 
             try:
                 await client.download_file(location, buffer)
-            except (AuthKeyUnregisteredError, FloodWaitError, FileMigrateError, LocationInvalidError, ConnectionError, FileIdInvalidError) as e:
+            except (AuthKeyUnregisteredError, FloodWaitError, FileMigrateError, ConnectionError) as e:
                 report_exception()
                 logger.exception('ocr download got error')
                 location_info['file_reference'] = b64encode(location_info['file_reference']).decode('utf-8')
